@@ -286,12 +286,15 @@ func (r *Runner) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sess
 	}()
 	ch <- syscall.SIGWINCH // Initial resize
 
-	// Set stdin to raw mode
-	oldState, err := makeRaw(os.Stdin.Fd())
-	if err != nil {
-		return fmt.Errorf("set raw mode: %w", err)
+	// Set stdin to raw mode (only if stdin is a terminal)
+	var oldState interface{}
+	if isTerminal(os.Stdin.Fd()) {
+		oldState, err = makeRaw(os.Stdin.Fd())
+		if err != nil {
+			return fmt.Errorf("set raw mode: %w", err)
+		}
+		defer restoreTerminal(os.Stdin.Fd(), oldState)
 	}
-	defer restoreTerminal(os.Stdin.Fd(), oldState)
 
 	// Copy I/O with activity monitoring
 	// PTY output -> stdout + file, with activity detection
