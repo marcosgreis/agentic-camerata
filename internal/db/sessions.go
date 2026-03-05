@@ -15,6 +15,8 @@ const (
 	WorkflowPlan      WorkflowType = "plan"
 	WorkflowImplement WorkflowType = "implement"
 	WorkflowFix       WorkflowType = "fix"
+	WorkflowPlay      WorkflowType = "play"
+	WorkflowReview    WorkflowType = "review"
 )
 
 // SessionStatus represents the status of a session

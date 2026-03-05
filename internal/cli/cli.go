@@ -11,9 +11,11 @@ type CLI struct {
 	Research   ResearchCmd   `cmd:"" help:"Start a research-focused session"`
 	Plan       PlanCmd       `cmd:"" help:"Start a planning session"`
 	Implement  ImplementCmd  `cmd:"" help:"Start an implementation session"`
+	Review     ReviewCmd     `cmd:"" help:"Review changes in the working directory"`
 	FixTest    FixTestCmd    `cmd:"fix-test" help:"Fix a failing test"`
 	LookAndFix LookAndFixCmd `cmd:"look-and-fix" help:"Look at an issue and fix it"`
 	Quick      QuickCmd      `cmd:"" help:"Quick single-response query (uses Sonnet)"`
+	Play       PlayCmd       `cmd:"" help:"Run a multi-phase playbook workflow"`
 	Sessions   SessionsCmd   `cmd:"" help:"List all sessions"`
 	Jump       JumpCmd       `cmd:"" help:"Jump to a session's tmux location"`
 	Dashboard  DashboardCmd  `cmd:"" help:"Open the TUI dashboard"`

@@ -79,6 +79,9 @@ var (
 	workflowGeneral = lipgloss.NewStyle().
 			Foreground(colorMuted)
 
+	workflowReview = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#06B6D4")) // Cyan
+
 	// Selection styles
 	selectedStyle = lipgloss.NewStyle().
 			Background(colorPrimary).
@@ -193,6 +196,9 @@ var (
 	workflowGeneralDim = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#6B7280")) // Darker gray
 
+	workflowReviewDim = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#0891B2")) // Darker cyan
+
 	// Dim ID style for history
 	dimIDStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#7A8290"))
@@ -276,6 +282,8 @@ func WorkflowStyle(workflow string) lipgloss.Style {
 		return workflowPlan
 	case "implement":
 		return workflowImplement
+	case "review":
+		return workflowReview
 	default:
 		return workflowGeneral
 	}
@@ -290,6 +298,8 @@ func WorkflowStyleDim(workflow string) lipgloss.Style {
 		return workflowPlanDim
 	case "implement":
 		return workflowImplementDim
+	case "review":
+		return workflowReviewDim
 	default:
 		return workflowGeneralDim
 	}

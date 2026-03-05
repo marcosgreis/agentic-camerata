@@ -2,11 +2,14 @@ package claude
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"syscall"
 	"time"
@@ -18,9 +21,14 @@ import (
 	"github.com/agentic-camerata/cmt/internal/tmux"
 )
 
+var capturedFileRe = regexp.MustCompile(`(thoughts/shared/\S+\.md)`)
+
 const (
 	// idleThreshold is how long without output before transitioning back to waiting
 	idleThreshold = 1 * time.Second
+	// autoTerminateThreshold is how long without output before killing the process
+	// This is longer than idleThreshold to avoid triggering on mid-response pauses
+	autoTerminateThreshold = 5 * time.Second
 )
 
 // Runner manages Claude CLI execution
@@ -60,16 +68,22 @@ type RunOptions struct {
 	CommentTag      string // Comment tag for look-and-fix (from CMT_COMMENT_TAG env var)
 	ResumeSessionID string // If non-empty, pass --resume to claude. "*" means no specific ID (interactive picker)
 	SkipTracking    bool   // If true, skip DB session creation and activity monitoring
+	AutoTerminate   bool   // If true, send Ctrl+D when session goes idle after working
+	CapturedFiles   *[]string // If non-nil, collect thoughts/shared/*.md paths from output
 }
 
 // activityMonitor tracks PTY output to detect working/waiting states
 type activityMonitor struct {
-	sessionID  string
-	db         *db.DB
-	lastOutput time.Time
-	isWorking  bool
-	mu         sync.Mutex
-	done       chan struct{}
+	sessionID     string
+	db            *db.DB
+	lastOutput    time.Time
+	isWorking     bool
+	hasWorked     bool
+	autoTerminate bool
+	terminated    bool
+	process       *os.Process
+	mu            sync.Mutex
+	done          chan struct{}
 }
 
 func newActivityMonitor(sessionID string, database *db.DB) *activityMonitor {
@@ -88,8 +102,10 @@ func (m *activityMonitor) onOutput() {
 	defer m.mu.Unlock()
 
 	m.lastOutput = time.Now()
+	m.terminated = false
 	if !m.isWorking {
 		m.isWorking = true
+		m.hasWorked = true
 		m.db.UpdateSessionStatus(m.sessionID, db.StatusWorking)
 	}
 }
@@ -106,9 +122,16 @@ func (m *activityMonitor) start() {
 				return
 			case <-ticker.C:
 				m.mu.Lock()
-				if m.isWorking && time.Since(m.lastOutput) > idleThreshold {
+				idle := time.Since(m.lastOutput)
+				if m.isWorking && idle > idleThreshold {
 					m.isWorking = false
 					m.db.UpdateSessionStatus(m.sessionID, db.StatusWaiting)
+				}
+				// Auto-terminate: kill the process after a longer idle period to avoid
+				// triggering on mid-response pauses between tool calls
+				if m.autoTerminate && m.hasWorked && !m.terminated && idle > autoTerminateThreshold && m.process != nil {
+					m.terminated = true
+					m.process.Kill()
 				}
 				m.mu.Unlock()
 			}
@@ -154,7 +177,7 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions) error {
 
 	// Skip DB tracking for quick/ephemeral commands
 	if opts.SkipTracking {
-		return r.runWithPTY(ctx, cmd, nil)
+		return r.runWithPTY(ctx, cmd, nil, opts)
 	}
 
 	// Create session record
@@ -187,10 +210,12 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions) error {
 	}
 
 	// Run with PTY capture
-	err = r.runWithPTY(ctx, cmd, session)
+	err = r.runWithPTY(ctx, cmd, session, opts)
 
 	// Update session status based on result
-	if err != nil {
+	// When auto-terminate kills the process, cmd.Wait() returns a "signal: killed" error
+	// which is expected and should be treated as a successful completion
+	if err != nil && !(opts.AutoTerminate && isKilledError(err)) {
 		r.db.UpdateSessionStatus(sessionID, db.StatusAbandoned)
 		return err
 	}
@@ -298,7 +323,7 @@ func (s *suspendState) setOldState(state interface{}) {
 }
 
 // runWithPTY runs the command with a pseudo-terminal for interactive use
-func (r *Runner) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Session) error {
+func (r *Runner) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Session, opts RunOptions) error {
 	// Start with PTY
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
@@ -308,12 +333,15 @@ func (r *Runner) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sess
 
 	// Update session with PID and start activity monitoring (skipped when not tracking)
 	var outFile *os.File
+	var monitor *activityMonitor
 	if session != nil {
 		if cmd.Process != nil {
 			r.db.UpdateSessionPID(session.ID, cmd.Process.Pid)
 		}
 
-		monitor := newActivityMonitor(session.ID, r.db)
+		monitor = newActivityMonitor(session.ID, r.db)
+		monitor.autoTerminate = opts.AutoTerminate
+		monitor.process = cmd.Process
 		monitor.start()
 		defer monitor.stop()
 
@@ -372,6 +400,9 @@ func (r *Runner) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sess
 		}()
 	}
 
+	// File capture dedup set
+	capturedSeen := map[string]bool{}
+
 	// Copy I/O with activity monitoring
 	// PTY output -> stdout + file, with activity detection
 	go func() {
@@ -379,9 +410,23 @@ func (r *Runner) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sess
 		for {
 			n, err := ptmx.Read(buf)
 			if n > 0 {
-				os.Stdout.Write(buf[:n])
+				writeAll(os.Stdout, buf[:n])
 				if outFile != nil {
 					outFile.Write(buf[:n])
+				}
+				if monitor != nil {
+					monitor.onOutput()
+				}
+
+				// Capture file paths from output
+				if opts.CapturedFiles != nil {
+					matches := capturedFileRe.FindAllString(string(buf[:n]), -1)
+					for _, m := range matches {
+						if !capturedSeen[m] {
+							capturedSeen[m] = true
+							*opts.CapturedFiles = append(*opts.CapturedFiles, m)
+						}
+					}
 				}
 			}
 			if err != nil {
@@ -404,7 +449,7 @@ func (r *Runner) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sess
 				if buf[i] == 0x1a {
 					// Write bytes before Ctrl+Z to PTY
 					if i > start {
-						ptmx.Write(buf[start:i])
+						writeAll(ptmx, buf[start:i])
 					}
 					// Suspend
 					ss.suspend()
@@ -414,12 +459,34 @@ func (r *Runner) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sess
 			}
 			// Write remaining bytes after last Ctrl+Z (or all bytes if no Ctrl+Z)
 			if start < n {
-				ptmx.Write(buf[start:n])
+				writeAll(ptmx, buf[start:n])
 			}
 		}
 	}()
 
 	// Wait for command to complete
 	return cmd.Wait()
+}
+
+// writeAll writes all bytes to w, retrying on short writes.
+func writeAll(w io.Writer, data []byte) {
+	for len(data) > 0 {
+		n, err := w.Write(data)
+		data = data[n:]
+		if err != nil {
+			return
+		}
+	}
+}
+
+// isKilledError returns true if the error is from a process killed by SIGKILL
+func isKilledError(err error) bool {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+			return status.Signal() == syscall.SIGKILL
+		}
+	}
+	return false
 }
 

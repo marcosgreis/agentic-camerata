@@ -7,24 +7,26 @@ _cmt_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    local commands="new research plan implement fix-test look-and-fix quick sessions jump dashboard"
+    local commands="new research plan implement fix-test look-and-fix quick play sessions jump dashboard todo"
     local global_opts="-d --db -v --verbose -a --autonomous -h --help"
-    local file_opts="-f -d -t"
+    local file_opts="-f --files -d --dirs -t --thoughts"
 
     # Handle command-specific completions
     case "${COMP_WORDS[1]}" in
         new)
-            # new [<task>] [-f file] [-d dir] [-t]
             case "$prev" in
-                -f)
+                -f|--files)
                     COMPREPLY=($(compgen -f -- "$cur"))
                     ;;
-                -d)
+                -d|--dirs)
                     COMPREPLY=($(compgen -d -- "$cur"))
+                    ;;
+                --resume-id)
+                    COMPREPLY=()
                     ;;
                 *)
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$file_opts" -- "$cur"))
+                        COMPREPLY=($(compgen -W "$file_opts -r --resume --resume-id" -- "$cur"))
                     fi
                     ;;
             esac
@@ -32,10 +34,10 @@ _cmt_completions() {
         research)
             # research <topic> [-f file] [-d dir] [-t]
             case "$prev" in
-                -f)
+                -f|--files)
                     COMPREPLY=($(compgen -f -- "$cur"))
                     ;;
-                -d)
+                -d|--dirs)
                     COMPREPLY=($(compgen -d -- "$cur"))
                     ;;
                 *)
@@ -48,10 +50,10 @@ _cmt_completions() {
         plan)
             # plan <task> [-f file] [-d dir] [-t]
             case "$prev" in
-                -f)
+                -f|--files)
                     COMPREPLY=($(compgen -f -- "$cur"))
                     ;;
-                -d)
+                -d|--dirs)
                     COMPREPLY=($(compgen -d -- "$cur"))
                     ;;
                 *)
@@ -64,10 +66,10 @@ _cmt_completions() {
         implement)
             # implement [<plan>] [-f file] [-d dir] [-t]
             case "$prev" in
-                -f)
+                -f|--files)
                     COMPREPLY=($(compgen -f -- "$cur"))
                     ;;
-                -d)
+                -d|--dirs)
                     COMPREPLY=($(compgen -d -- "$cur"))
                     ;;
                 *)
@@ -83,10 +85,10 @@ _cmt_completions() {
         fix-test)
             # fix-test <test> [-f file] [-d dir] [-t]
             case "$prev" in
-                -f)
+                -f|--files)
                     COMPREPLY=($(compgen -f -- "$cur"))
                     ;;
-                -d)
+                -d|--dirs)
                     COMPREPLY=($(compgen -d -- "$cur"))
                     ;;
                 *)
@@ -97,17 +99,19 @@ _cmt_completions() {
             esac
             ;;
         look-and-fix)
-            # look-and-fix <issue> [-f file] [-d dir] [-t]
             case "$prev" in
-                -f)
+                -f|--files)
                     COMPREPLY=($(compgen -f -- "$cur"))
                     ;;
-                -d)
+                -d|--dirs)
                     COMPREPLY=($(compgen -d -- "$cur"))
+                    ;;
+                --comment-tag)
+                    COMPREPLY=()
                     ;;
                 *)
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$file_opts" -- "$cur"))
+                        COMPREPLY=($(compgen -W "$file_opts --comment-tag" -- "$cur"))
                     fi
                     ;;
             esac
@@ -116,18 +120,23 @@ _cmt_completions() {
             # quick <prompt> - no specific completions
             COMPREPLY=()
             ;;
+        play)
+            # play <playbook> - complete with markdown files
+            if [[ $COMP_CWORD -eq 2 ]]; then
+                COMPREPLY=($(compgen -f -X '!*.md' -- "$cur"))
+            fi
+            ;;
         sessions)
-            # sessions [-s status] [-n limit]
             case "$prev" in
                 -s|--status)
                     COMPREPLY=($(compgen -W "waiting working completed abandoned" -- "$cur"))
                     ;;
-                -n)
+                -n|--limit)
                     COMPREPLY=()
                     ;;
                 *)
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "-s -n" -- "$cur"))
+                        COMPREPLY=($(compgen -W "-s --status -n --limit" -- "$cur"))
                     fi
                     ;;
             esac
@@ -141,8 +150,67 @@ _cmt_completions() {
             fi
             ;;
         dashboard)
-            # dashboard - no arguments
-            COMPREPLY=()
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "--venues --todos --debug" -- "$cur"))
+            fi
+            ;;
+        todo)
+            local todo_commands="add list done undone update rm"
+            case "${COMP_WORDS[2]}" in
+                add)
+                    case "$prev" in
+                        -s|--source) COMPREPLY=() ;;
+                        -c|--channel) COMPREPLY=() ;;
+                        -f|--sender) COMPREPLY=() ;;
+                        -u|--url) COMPREPLY=() ;;
+                        -d|--date) COMPREPLY=() ;;
+                        -k|--key) COMPREPLY=() ;;
+                        -m|--full-message) COMPREPLY=() ;;
+                        *)
+                            if [[ "$cur" == -* ]]; then
+                                COMPREPLY=($(compgen -W "-s --source -c --channel -f --sender -u --url -d --date -k --key -m --full-message" -- "$cur"))
+                            fi
+                            ;;
+                    esac
+                    ;;
+                list)
+                    case "$prev" in
+                        -s|--status)
+                            COMPREPLY=($(compgen -W "todo done all" -- "$cur"))
+                            ;;
+                        *)
+                            if [[ "$cur" == -* ]]; then
+                                COMPREPLY=($(compgen -W "-s --status" -- "$cur"))
+                            fi
+                            ;;
+                    esac
+                    ;;
+                update)
+                    case "$prev" in
+                        -S|--summary) COMPREPLY=() ;;
+                        -s|--source) COMPREPLY=() ;;
+                        -c|--channel) COMPREPLY=() ;;
+                        -f|--sender) COMPREPLY=() ;;
+                        -u|--url) COMPREPLY=() ;;
+                        -d|--date) COMPREPLY=() ;;
+                        -m|--full-message) COMPREPLY=() ;;
+                        *)
+                            if [[ "$cur" == -* ]]; then
+                                COMPREPLY=($(compgen -W "-S --summary -s --source -c --channel -f --sender -u --url -d --date -m --full-message" -- "$cur"))
+                            fi
+                            ;;
+                    esac
+                    ;;
+                done|undone|rm)
+                    # These take a todo ID - no dynamic completion
+                    COMPREPLY=()
+                    ;;
+                *)
+                    if [[ $COMP_CWORD -eq 2 ]]; then
+                        COMPREPLY=($(compgen -W "$todo_commands" -- "$cur"))
+                    fi
+                    ;;
+            esac
             ;;
         *)
             # Complete commands and global options

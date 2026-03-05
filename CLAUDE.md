@@ -12,6 +12,7 @@ cmt implement [plan_file]   # Execute plan (fzf selector if no file)
 cmt fix-test "test"         # Fix a failing test
 cmt look-and-fix "issue"    # Investigate and fix issues
 cmt quick "prompt"          # Single-response Sonnet query
+cmt play playbook.md        # Run multi-phase playbook workflow
 cmt jump [id]               # Navigate to session's tmux location
 cmt sessions [-s status]    # List sessions
 cmt dashboard               # Interactive TUI
@@ -34,6 +35,7 @@ internal/
     quick.go                 # Single-response Sonnet query
     fixtest.go               # Fix failing test workflow
     look_and_fix.go          # Investigate and fix issues
+    play.go                  # Multi-phase playbook workflow
     fileflags.go             # -f/-d/-t file selection flags shared across commands
   claude/
     claude.go                # Runner - session execution, PTY management, activity monitoring
@@ -43,6 +45,8 @@ internal/
     db.go                    # SQLite connection, database initialization
     sessions.go              # Session CRUD operations (incl. soft delete/restore/prune)
     schema.sql               # Database schema (embedded)
+  playbook/
+    playbook.go              # Playbook parser (phases from markdown)
   plans/
     plans.go                 # Plan file selection via fzf
   tmux/
@@ -128,6 +132,7 @@ Default: `~/.config/cmt/sessions.db` (override: `-d` flag or `CMT_DB` env)
 | implement | `implement` | `/implement_plan implement all phases ignoring any manual verification steps` |
 | fix | `fix-test` | `Analyze and fix the failing test at:` |
 | fix | `look-and-fix` | `Take a look at this repo and search for comments tagged with {tag}...` |
+| play | `play` | Orchestrates phases from a playbook markdown file (auto-terminates each phase) |
 
 ## Session Statuses
 

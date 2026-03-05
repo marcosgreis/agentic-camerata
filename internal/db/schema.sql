@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     -- Session info
-    workflow_type TEXT NOT NULL DEFAULT 'general',  -- general, research, plan, implement
+    workflow_type TEXT NOT NULL DEFAULT 'general',  -- general, research, plan, implement, fix, play, review
     status TEXT NOT NULL DEFAULT 'waiting',          -- waiting, working, completed, abandoned
     working_directory TEXT NOT NULL,
     task_description TEXT,
