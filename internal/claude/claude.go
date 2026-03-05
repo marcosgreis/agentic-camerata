@@ -59,6 +59,7 @@ type RunOptions struct {
 	AutonomousMode  bool   // If true, skip permission prompts
 	CommentTag      string // Comment tag for look-and-fix (from CMT_COMMENT_TAG env var)
 	ResumeSessionID string // If non-empty, pass --resume to claude. "*" means no specific ID (interactive picker)
+	SkipTracking    bool   // If true, skip DB session creation and activity monitoring
 }
 
 // activityMonitor tracks PTY output to detect working/waiting states
@@ -142,6 +143,20 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions) error {
 		}
 	}
 
+	// Set comment tag from environment if not already set
+	if opts.CommentTag == "" {
+		opts.CommentTag = os.Getenv("CMT_COMMENT_TAG")
+	}
+
+	// Build command
+	cmd := r.buildCommand(opts)
+	cmd.Dir = workDir
+
+	// Skip DB tracking for quick/ephemeral commands
+	if opts.SkipTracking {
+		return r.runWithPTY(ctx, cmd, nil)
+	}
+
 	// Create session record
 	sessionID := uuid.New().String()[:8]
 	outputFile := filepath.Join(r.outputDir, sessionID+".log")
@@ -170,15 +185,6 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions) error {
 	if err := r.db.CreateSession(session); err != nil {
 		return fmt.Errorf("create session: %w", err)
 	}
-
-	// Set comment tag from environment if not already set
-	if opts.CommentTag == "" {
-		opts.CommentTag = os.Getenv("CMT_COMMENT_TAG")
-	}
-
-	// Build command
-	cmd := r.buildCommand(opts)
-	cmd.Dir = workDir
 
 	// Run with PTY capture
 	err = r.runWithPTY(ctx, cmd, session)
@@ -300,22 +306,25 @@ func (r *Runner) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sess
 	}
 	defer ptmx.Close()
 
-	// Update session with PID
-	if cmd.Process != nil {
-		r.db.UpdateSessionPID(session.ID, cmd.Process.Pid)
-	}
+	// Update session with PID and start activity monitoring (skipped when not tracking)
+	var outFile *os.File
+	if session != nil {
+		if cmd.Process != nil {
+			r.db.UpdateSessionPID(session.ID, cmd.Process.Pid)
+		}
 
-	// Create activity monitor
-	monitor := newActivityMonitor(session.ID, r.db)
-	monitor.start()
-	defer monitor.stop()
+		monitor := newActivityMonitor(session.ID, r.db)
+		monitor.start()
+		defer monitor.stop()
 
-	// Open output file for logging
-	outFile, err := os.Create(session.OutputFile)
-	if err != nil {
-		return fmt.Errorf("create output file: %w", err)
+		// Open output file for logging
+		var err error
+		outFile, err = os.Create(session.OutputFile)
+		if err != nil {
+			return fmt.Errorf("create output file: %w", err)
+		}
+		defer outFile.Close()
 	}
-	defer outFile.Close()
 
 	// Initialize suspend state
 	ss := &suspendState{
@@ -370,9 +379,10 @@ func (r *Runner) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sess
 		for {
 			n, err := ptmx.Read(buf)
 			if n > 0 {
-				monitor.onOutput()
 				os.Stdout.Write(buf[:n])
-				outFile.Write(buf[:n])
+				if outFile != nil {
+					outFile.Write(buf[:n])
+				}
 			}
 			if err != nil {
 				break

@@ -11,7 +11,7 @@ cmt plan "feature"          # Design before implementing
 cmt implement [plan_file]   # Execute plan (fzf selector if no file)
 cmt fix-test "test"         # Fix a failing test
 cmt look-and-fix "issue"    # Investigate and fix issues
-cmt quick "prompt"          # Single-response Haiku query
+cmt quick "prompt"          # Single-response Sonnet query
 cmt jump [id]               # Navigate to session's tmux location
 cmt sessions [-s status]    # List sessions
 cmt dashboard               # Interactive TUI
@@ -31,16 +31,17 @@ internal/
     jump.go                  # Tmux navigation
     sessions.go              # List sessions with filtering
     dashboard.go             # TUI dashboard launcher
-    quick.go                 # Single-response Haiku query
+    quick.go                 # Single-response Sonnet query
     fixtest.go               # Fix failing test workflow
     look_and_fix.go          # Investigate and fix issues
+    fileflags.go             # -f/-d/-t file selection flags shared across commands
   claude/
-    claude.go                # Runner - session execution, PTY management
+    claude.go                # Runner - session execution, PTY management, activity monitoring
     prompts.go               # CommandType and prompt prefix mappings
     terminal.go              # Terminal state management (raw mode, resize)
   db/
     db.go                    # SQLite connection, database initialization
-    sessions.go              # Session CRUD operations
+    sessions.go              # Session CRUD operations (incl. soft delete/restore/prune)
     schema.sql               # Database schema (embedded)
   plans/
     plans.go                 # Plan file selection via fzf
@@ -48,6 +49,7 @@ internal/
     tmux.go                  # Tmux detection, location tracking, navigation
   tui/
     dashboard.go             # Bubble Tea dashboard model and rendering
+    venues.go                # Venue aggregation and grid/expanded view rendering
     styles.go                # Lipgloss styling definitions
 completions/                 # Shell completions (bash, zsh, fish)
 ```
@@ -83,21 +85,26 @@ Default: `~/.config/cmt/sessions.db` (override: `-d` flag or `CMT_DB` env)
 - `id` - 8-char UUID (primary key)
 - `created_at`, `updated_at` - timestamps
 - `workflow_type` - general, research, plan, implement, fix
-- `status` - active, completed, abandoned
+- `status` - waiting, working, completed, abandoned, killed, deleted, restored
 - `working_directory` - where session was started
 - `task_description` - the prompt/task
+- `prefix` - CMT_PREFIX environment variable value
 - `claude_session_id` - Claude CLI session ID
 - `tmux_session`, `tmux_window`, `tmux_pane` - tmux location
 - `output_file` - path to session log
 - `pid` - process ID
+- `deleted_at` - soft-delete timestamp (NULL if not deleted)
 
 **Indices:** status, workflow_type, created_at DESC
+
+**Soft delete:** Sessions are soft-deleted (status=deleted, deleted_at set). Pruned after 7 days. Can be restored to status=restored.
 
 ## Directories
 
 - **Database:** `~/.config/cmt/sessions.db`
 - **Session logs:** `~/.config/cmt/output/{session_id}.log`
 - **Plan files:** `thoughts/shared/plans/*.md`
+- **Research files:** `thoughts/shared/research/*.md`
 
 ## Conventions
 
@@ -106,6 +113,10 @@ Default: `~/.config/cmt/sessions.db` (override: `-d` flag or `CMT_DB` env)
 - Requires running inside tmux (exits with message if not)
 - Database path supports `~` home directory expansion
 - WAL mode enabled for SQLite concurrency
+- Activity monitoring: session transitions between `waiting` (idle >1s) and `working` (output detected) states
+- File selection flags (`-f file`, `-d dir`, `-t`) available on most session commands via `FileFlags`
+- Global flags: `-v` (verbose), `-a` (autonomous mode, skips permission prompts; also `CMT_AUTONOMOUS` env)
+- Comment tag for look-and-fix defaults to `CMT` (override with `CMT_COMMENT_TAG` env)
 
 ## Workflow Types
 
@@ -114,11 +125,24 @@ Default: `~/.config/cmt/sessions.db` (override: `-d` flag or `CMT_DB` env)
 | general | `new` | (none) |
 | research | `research` | `/research_codebase` |
 | plan | `plan` | `/create_plan` |
-| implement | `implement` | `/implement_plan implement all phases...` |
-| fix | `fix-test`, `look-and-fix` | Custom fix prompts |
+| implement | `implement` | `/implement_plan implement all phases ignoring any manual verification steps` |
+| fix | `fix-test` | `Analyze and fix the failing test at:` |
+| fix | `look-and-fix` | `Take a look at this repo and search for comments tagged with {tag}...` |
 
 ## Session Statuses
 
-- `active` - session in progress
+- `waiting` - session started, waiting for Claude input
+- `working` - Claude is actively generating output
 - `completed` - session finished successfully
 - `abandoned` - session interrupted/abandoned
+- `killed` - session was killed
+- `deleted` - soft-deleted (pruned after 7 days)
+- `restored` - restored from deleted state
+
+## Dashboard Views
+
+The TUI dashboard (`cmt dashboard`) supports multiple view modes:
+- **Normal** - session list with info pane
+- **Trash** - soft-deleted sessions
+- **Venues** - grid of working directories with session/plan/research counts
+- **Venue Expanded** - sessions + plan/research documents for a single venue

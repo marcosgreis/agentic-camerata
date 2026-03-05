@@ -38,5 +38,6 @@ func (c *QuickCmd) Run(cli *CLI) error {
 		Model:           "haiku",
 		PrintMode:       true,
 		AutonomousMode:  cli.Autonomous,
+		SkipTracking:    true,
 	})
 }
