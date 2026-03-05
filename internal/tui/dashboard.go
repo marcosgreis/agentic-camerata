@@ -3,7 +3,9 @@ package tui
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"syscall"
@@ -27,15 +29,20 @@ const (
 	viewTrash
 	viewVenues
 	viewVenueExpanded
+	viewTodos
 )
 
 // ViewVenues is the exported constant for venues view mode (for CLI flag)
 const ViewVenues = viewVenues
 
+// ViewTodos is the exported constant for todos view mode (for CLI flag)
+const ViewTodos = viewTodos
+
 // Dashboard is the main TUI model
 type Dashboard struct {
 	db       *db.DB
 	sessions []*db.Session
+	todos    []*db.Todo
 	selected int
 	focus    int
 
@@ -76,6 +83,27 @@ func NewDashboard(database *db.DB) *Dashboard {
 	}
 }
 
+// DebugRender loads data synchronously and returns the rendered view for debugging.
+func (d *Dashboard) DebugRender(width, height int) string {
+	d.width = width
+	d.height = height
+
+	// Load data synchronously
+	if msg, ok := d.loadSessions().(sessionsLoadedMsg); ok {
+		d.sessions = sortSessions(msg.sessions)
+		d.err = msg.err
+	}
+	if msg, ok := d.loadTodos().(todosLoadedMsg); ok {
+		d.todos = msg.todos
+	}
+
+	d.loading = false
+	d.infoViewport = viewport.New(d.infoWidth(), d.infoHeight())
+	d.updateInfoContent()
+
+	return d.View()
+}
+
 // JumpTarget returns the session to jump to (if any) after the dashboard exits
 func (d *Dashboard) JumpTarget() *db.Session {
 	return d.jumpTarget
@@ -92,6 +120,12 @@ type sessionsLoadedMsg struct {
 	err      error
 }
 
+// todosLoadedMsg is sent when todos are loaded
+type todosLoadedMsg struct {
+	todos []*db.Todo
+	err   error
+}
+
 // tickMsg triggers periodic updates
 type tickMsg time.Time
 
@@ -106,6 +140,7 @@ func (d *Dashboard) Init() tea.Cmd {
 	return tea.Batch(
 		d.pruneDeletedSessions,
 		d.loadSessions,
+		d.loadTodos,
 		d.tick(),
 	)
 }
@@ -114,6 +149,12 @@ func (d *Dashboard) Init() tea.Cmd {
 func (d *Dashboard) pruneDeletedSessions() tea.Msg {
 	count, err := d.db.PruneDeletedSessions()
 	return pruneCompletedMsg{count: count, err: err}
+}
+
+// loadTodos fetches all todos from the database
+func (d *Dashboard) loadTodos() tea.Msg {
+	todos, err := d.db.ListTodos("") // all statuses
+	return todosLoadedMsg{todos: todos, err: err}
 }
 
 // loadSessions fetches sessions from the database based on view mode
@@ -262,6 +303,18 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				// Jump to the pane - dashboard stays running in its pane
 				tmux.JumpTo(loc)
+			} else if d.viewMode == viewTodos && d.focus == focusList {
+				items := sortedTodos(d.todos)
+				if d.selected < len(items) {
+					item := items[d.selected]
+					if item.Status == db.TodoStatusTodo {
+						item.Status = db.TodoStatusDone
+					} else {
+						item.Status = db.TodoStatusTodo
+					}
+					d.db.UpdateTodo(item)
+					cmds = append(cmds, d.loadTodos)
+				}
 			}
 
 		case "esc", "backspace":
@@ -270,10 +323,22 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				d.showDocViewer = false
 				d.focus = focusList
 				// d.selected is still at the venue that was expanded
+			} else if d.viewMode == viewTodos {
+				d.viewMode = viewNormal
+				d.showInfo = false
+				d.focus = focusList
 			}
 
 		case "o":
-			if d.viewMode == viewVenueExpanded {
+			if d.viewMode == viewTodos && d.focus == focusList {
+				items := sortedTodos(d.todos)
+				if d.selected < len(items) {
+					item := items[d.selected]
+					if item.URL != nil {
+						openURL(*item.URL)
+					}
+				}
+			} else if d.viewMode == viewVenueExpanded {
 				if d.expandedSelected < len(d.expandedItems) {
 					item := d.expandedItems[d.expandedSelected]
 					if item.Type == VenueItemDocument {
@@ -330,6 +395,12 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				d.db.SoftDeleteSession(session.ID)
 				cmds = append(cmds, d.loadSessions)
+			} else if d.viewMode == viewTodos && d.focus == focusList {
+				items := sortedTodos(d.todos)
+				if d.selected < len(items) {
+					d.db.DeleteTodo(items[d.selected].ID)
+					cmds = append(cmds, d.loadTodos)
+				}
 			}
 
 		case "T":
@@ -360,6 +431,12 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.selected = 0
 			d.venueScrollRow = 0
 			cmds = append(cmds, d.loadSessions)
+
+		case "t":
+			d.viewMode = viewTodos
+			d.selected = 0
+			d.showInfo = false
+			d.focus = focusList
 		}
 
 	case tea.WindowSizeMsg:
@@ -394,9 +471,22 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case todosLoadedMsg:
+		if msg.err == nil {
+			d.todos = msg.todos
+			if d.viewMode == viewTodos {
+				sortedLen := len(sortedTodos(d.todos))
+				if d.selected >= sortedLen && sortedLen > 0 {
+					d.selected = sortedLen - 1
+				}
+				d.updateInfoContent()
+			}
+		}
+
 	case tickMsg:
-		// Periodic refresh of sessions only
+		// Periodic refresh of sessions and todos
 		cmds = append(cmds, d.loadSessions)
+		cmds = append(cmds, d.loadTodos)
 		cmds = append(cmds, d.tick())
 	}
 
@@ -408,6 +498,16 @@ func (d *Dashboard) updateInfoContent() {
 	// In expanded venue view, show info for the selected expanded item
 	if d.viewMode == viewVenueExpanded {
 		d.updateExpandedInfoContent()
+		return
+	}
+
+	if d.viewMode == viewTodos {
+		items := sortedTodos(d.todos)
+		if d.selected < len(items) {
+			d.infoViewport.SetContent(d.formatTodoInfo(items[d.selected]))
+		} else {
+			d.infoViewport.SetContent("No item selected")
+		}
 		return
 	}
 
@@ -595,6 +695,11 @@ func (d *Dashboard) renderSessionList() string {
 	// Expanded venue view
 	if d.viewMode == viewVenueExpanded {
 		return d.renderVenueExpanded()
+	}
+
+	// Todos view
+	if d.viewMode == viewTodos {
+		return d.renderTodosList()
 	}
 
 	// Determine visible columns based on width
@@ -907,6 +1012,8 @@ func (d *Dashboard) renderHelp() string {
 		help = "j/k: navigate • R: restore • T: back to sessions • i: toggle info • r: refresh • q: quit"
 	case viewVenues:
 		help = "h/j/k/l: navigate • enter: expand • V: back to sessions • r: refresh • q: quit"
+	case viewTodos:
+		help = "j/k: navigate • enter: toggle done • o: open url • D: delete • i: toggle info • esc: back • r: refresh • q: quit"
 	case viewVenueExpanded:
 		if d.showDocViewer {
 			help = "j/k: navigate • tab: switch focus • o: close viewer • enter: jump • esc: back • q: quit"
@@ -926,6 +1033,9 @@ func (d *Dashboard) listLen() int {
 	}
 	if d.viewMode == viewVenueExpanded {
 		return len(d.expandedItems)
+	}
+	if d.viewMode == viewTodos {
+		return len(sortedTodos(d.todos))
 	}
 	return len(d.sessions)
 }
@@ -1026,6 +1136,20 @@ func formatAge(t time.Time) string {
 	default:
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
+}
+
+// openURL opens a URL in the default browser
+func openURL(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	default:
+		return
+	}
+	cmd.Start()
 }
 
 // sortSessions sorts sessions with running (waiting/working) first, then by creation time descending

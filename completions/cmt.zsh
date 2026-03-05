@@ -1,5 +1,5 @@
 #compdef cmt
-# Zsh completion for cmt (Claude Management Tool)
+# Zsh completion for cmt (Agentic Camerata)
 
 _cmt_sessions() {
     local sessions

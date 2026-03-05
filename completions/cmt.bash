@@ -1,5 +1,5 @@
 #!/bin/bash
-# Bash completion for cmt (Claude Management Tool)
+# Bash completion for cmt (Agentic Camerata)
 
 _cmt_completions() {
     local cur prev

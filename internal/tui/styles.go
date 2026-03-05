@@ -125,6 +125,29 @@ var (
 				Padding(0, 1).
 				MarginBottom(0)
 
+	// Todo status styles
+	todoStatusTodo = lipgloss.NewStyle().
+			Foreground(colorWarning).
+			Bold(true)
+
+	todoStatusDone = lipgloss.NewStyle().
+			Foreground(colorMuted)
+
+	sectionTodoHeader = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FEF3C7")).
+			Background(lipgloss.Color("#D97706")).
+			Padding(0, 1).
+			MarginBottom(0)
+
+	sectionDoneHeader = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#D1FAE5")).
+			Background(lipgloss.Color("#065F46")).
+			Padding(0, 1).
+			MarginTop(1).
+			MarginBottom(0)
+
 	// Dim style for non-active sessions
 	dimStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#9CA3AF"))

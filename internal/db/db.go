@@ -88,6 +88,54 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("create deleted_at index: %w", err)
 	}
 
+	// Create todos table if it doesn't exist (for existing databases)
+	if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS todos (
+		id TEXT PRIMARY KEY,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		status TEXT NOT NULL DEFAULT 'todo',
+		summary TEXT NOT NULL,
+		date DATETIME,
+		source TEXT,
+		url TEXT,
+		channel TEXT,
+		sender TEXT
+	)`); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("migrate todos table: %w", err)
+	}
+	if _, err := conn.Exec(`CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status)`); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("migrate todos status index: %w", err)
+	}
+	if _, err := conn.Exec(`CREATE INDEX IF NOT EXISTS idx_todos_created ON todos(created_at DESC)`); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("migrate todos created index: %w", err)
+	}
+
+	// Add idempotency_key column to todos if it doesn't exist
+	_, err = conn.Exec(`ALTER TABLE todos ADD COLUMN idempotency_key TEXT`)
+	if err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			conn.Close()
+			return nil, fmt.Errorf("migrate todos idempotency_key column: %w", err)
+		}
+	}
+	_, err = conn.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_todos_idempotency ON todos(idempotency_key) WHERE idempotency_key IS NOT NULL`)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("create todos idempotency index: %w", err)
+	}
+
+	// Add full_message column to todos if it doesn't exist
+	_, err = conn.Exec(`ALTER TABLE todos ADD COLUMN full_message TEXT`)
+	if err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			conn.Close()
+			return nil, fmt.Errorf("migrate todos full_message column: %w", err)
+		}
+	}
+
 	// Recover stuck sessions: working sessions with dead PIDs should be marked as abandoned
 	rows, err := conn.Query(`SELECT id, pid FROM sessions WHERE status = 'working' AND pid IS NOT NULL`)
 	if err != nil {

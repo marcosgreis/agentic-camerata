@@ -18,7 +18,7 @@ func main() {
 
 	ctx := kong.Parse(&c,
 		kong.Name("cmt"),
-		kong.Description("Claude Management Tool - Orchestrate Claude AI coding sessions"),
+		kong.Description("Agentic Camerata - Orchestrate Claude AI coding sessions"),
 		kong.UsageOnError(),
 		kong.Vars{
 			"version": version,

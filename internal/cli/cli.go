@@ -17,6 +17,7 @@ type CLI struct {
 	Sessions   SessionsCmd   `cmd:"" help:"List all sessions"`
 	Jump       JumpCmd       `cmd:"" help:"Jump to a session's tmux location"`
 	Dashboard  DashboardCmd  `cmd:"" help:"Open the TUI dashboard"`
+	Todo       TodoCmd       `cmd:"" help:"Manage todos"`
 
 	// Global flags
 	DB         string `help:"Database path" default:"~/.config/cmt/sessions.db" env:"CMT_DB" optional:""`

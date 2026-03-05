@@ -1,4 +1,4 @@
-# Fish completion for cmt (Claude Management Tool)
+# Fish completion for cmt (Agentic Camerata)
 
 # Disable file completions by default
 complete -c cmt -f
