@@ -35,7 +35,7 @@ func (c *QuickCmd) Run(cli *CLI) error {
 		Command:         claude.CommandQuick,
 		WorkflowType:    db.WorkflowGeneral,
 		TaskDescription: prompt,
-		Model:           "haiku",
+		Model:           cli.ResolveModel("haiku"),
 		PrintMode:       true,
 		AutonomousMode:  cli.Autonomous,
 		SkipTracking:    true,

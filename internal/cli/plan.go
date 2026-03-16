@@ -33,6 +33,7 @@ func (c *PlanCmd) Run(cli *CLI) error {
 		Command:         claude.CommandPlan,
 		WorkflowType:    db.WorkflowPlan,
 		TaskDescription: task,
+		Model:           cli.ResolveModel("opus"),
 		AutonomousMode:  cli.Autonomous,
 	})
 }

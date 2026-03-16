@@ -33,6 +33,7 @@ func (c *ResearchCmd) Run(cli *CLI) error {
 		Command:         claude.CommandResearch,
 		WorkflowType:    db.WorkflowResearch,
 		TaskDescription: topic,
+		Model:           cli.ResolveModel("opus"),
 		AutonomousMode:  cli.Autonomous,
 	})
 }

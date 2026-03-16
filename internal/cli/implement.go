@@ -51,6 +51,7 @@ func (c *ImplementCmd) Run(cli *CLI) error {
 		Command:         claude.CommandImplement,
 		WorkflowType:    db.WorkflowImplement,
 		TaskDescription: task,
+		Model:           cli.ResolveModel("sonnet"),
 		AutonomousMode:  cli.Autonomous,
 	})
 }

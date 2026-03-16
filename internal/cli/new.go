@@ -43,6 +43,7 @@ func (c *NewCmd) Run(cli *CLI) error {
 		Command:         claude.CommandNew,
 		WorkflowType:    db.WorkflowGeneral,
 		TaskDescription: task,
+		Model:           cli.ResolveModel("opus"),
 		AutonomousMode:  cli.Autonomous,
 		ResumeSessionID: resumeID,
 	})

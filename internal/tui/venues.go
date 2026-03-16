@@ -53,10 +53,12 @@ const (
 
 // VenueItem represents a single item in the expanded venue list
 type VenueItem struct {
-	Type    VenueItemType
-	Session *db.Session  // non-nil when Type == VenueItemSession
-	DocPath string       // full path when Type == VenueItemDocument
-	DocType DocumentType // plan or research
+	Type      VenueItemType
+	Session   *db.Session  // non-nil when Type == VenueItemSession
+	Depth     int          // indent level for sessions (0 = top-level)
+	InRunning bool         // which section the session belongs to
+	DocPath   string       // full path when Type == VenueItemDocument
+	DocType   DocumentType // plan or research
 }
 
 // buildVenues aggregates sessions by working directory
@@ -113,7 +115,7 @@ func buildVenueItems(venue *Venue, sessions []*db.Session) []VenueItem {
 	var items []VenueItem
 
 	// Filter sessions for this venue's directory
-	var runningSessions, historySessions []*db.Session
+	var venueSessions []*db.Session
 	for _, s := range sessions {
 		dir := s.WorkingDirectory
 		if dir == "" {
@@ -122,21 +124,18 @@ func buildVenueItems(venue *Venue, sessions []*db.Session) []VenueItem {
 		if dir != venue.Directory {
 			continue
 		}
-		if s.Status == db.StatusWaiting || s.Status == db.StatusWorking {
-			runningSessions = append(runningSessions, s)
-		} else {
-			historySessions = append(historySessions, s)
-		}
+		venueSessions = append(venueSessions, s)
 	}
 
-	// Add running sessions
-	for _, s := range runningSessions {
-		items = append(items, VenueItem{Type: VenueItemSession, Session: s})
-	}
-
-	// Add history sessions
-	for _, s := range historySessions {
-		items = append(items, VenueItem{Type: VenueItemSession, Session: s})
+	// Build tree-ordered nodes for hierarchy display
+	nodes := buildSessionTree(venueSessions)
+	for _, n := range nodes {
+		items = append(items, VenueItem{
+			Type:      VenueItemSession,
+			Session:   n.session,
+			Depth:     n.depth,
+			InRunning: n.inRunning,
+		})
 	}
 
 	// Add plan documents
@@ -186,7 +185,7 @@ func (d *Dashboard) renderVenueExpanded() string {
 	researchCount := 0
 	for _, item := range d.expandedItems {
 		switch {
-		case item.Type == VenueItemSession && (item.Session.Status == db.StatusWaiting || item.Session.Status == db.StatusWorking):
+		case item.Type == VenueItemSession && item.InRunning:
 			runningCount++
 		case item.Type == VenueItemSession:
 			historyCount++
@@ -215,7 +214,7 @@ func (d *Dashboard) renderVenueExpanded() string {
 		// Determine which section this item belongs to
 		newSection := -1
 		switch {
-		case item.Type == VenueItemSession && (item.Session.Status == db.StatusWaiting || item.Session.Status == db.StatusWorking):
+		case item.Type == VenueItemSession && item.InRunning:
 			newSection = 0
 		case item.Type == VenueItemSession:
 			newSection = 1
@@ -258,8 +257,8 @@ func (d *Dashboard) renderVenueExpanded() string {
 		isSelected := itemIdx == d.expandedSelected
 
 		if item.Type == VenueItemSession {
-			inHistory := !(item.Session.Status == db.StatusWaiting || item.Session.Status == db.StatusWorking)
-			line := d.formatSessionLine(item.Session, cols, isSelected, inHistory)
+			inHistory := !isRunning(item.Session)
+			line := d.formatSessionLine(item.Session, cols, isSelected, inHistory, item.Depth)
 			if isSelected {
 				content.WriteString(selectionIndicatorStyle.Render(">") + " " + line + "\n")
 			} else {

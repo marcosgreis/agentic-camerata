@@ -33,6 +33,7 @@ func (c *FixTestCmd) Run(cli *CLI) error {
 		Command:         claude.CommandFixTest,
 		WorkflowType:    db.WorkflowFix,
 		TaskDescription: test,
+		Model:           cli.ResolveModel("opus"),
 		AutonomousMode:  cli.Autonomous,
 	})
 }

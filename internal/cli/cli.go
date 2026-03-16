@@ -25,9 +25,18 @@ type CLI struct {
 	DB         string `help:"Database path" default:"~/.config/cmt/sessions.db" env:"CMT_DB" optional:""`
 	Verbose    bool   `short:"v" help:"Enable verbose output"`
 	Autonomous bool   `short:"a" help:"Enable autonomous mode (skip permission prompts)" env:"CMT_AUTONOMOUS"`
+	Model      string `help:"Override default model for this invocation" env:"CMT_MODEL" optional:""`
 
 	// Shared state (populated by Run)
 	database *db.DB
+}
+
+// ResolveModel returns the override model if set, otherwise the command default.
+func (c *CLI) ResolveModel(defaultModel string) string {
+	if c.Model != "" {
+		return c.Model
+	}
+	return defaultModel
 }
 
 // Database returns the database connection

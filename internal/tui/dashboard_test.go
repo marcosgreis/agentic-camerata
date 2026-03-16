@@ -343,6 +343,131 @@ func (e *testError) Error() string {
 	return e.msg
 }
 
+func TestBuildSessionTree(t *testing.T) {
+	now := time.Now()
+	makeSession := func(id, parentID string, status db.SessionStatus, offsetSec int) *db.Session {
+		return &db.Session{
+			ID:        id,
+			ParentID:  parentID,
+			Status:    status,
+			CreatedAt: now.Add(time.Duration(offsetSec) * time.Second),
+		}
+	}
+
+	t.Run("empty list", func(t *testing.T) {
+		nodes := buildSessionTree(nil)
+		if len(nodes) != 0 {
+			t.Errorf("expected 0 nodes, got %d", len(nodes))
+		}
+	})
+
+	t.Run("all top-level", func(t *testing.T) {
+		sessions := []*db.Session{
+			makeSession("a", "", db.StatusCompleted, 0),
+			makeSession("b", "", db.StatusWaiting, 1),
+		}
+		nodes := buildSessionTree(sessions)
+		if len(nodes) != 2 {
+			t.Fatalf("expected 2 nodes, got %d", len(nodes))
+		}
+		// Running should come first
+		if nodes[0].session.ID != "b" {
+			t.Errorf("expected running session 'b' first, got '%s'", nodes[0].session.ID)
+		}
+		for _, n := range nodes {
+			if n.depth != 0 {
+				t.Errorf("session %s: expected depth 0, got %d", n.session.ID, n.depth)
+			}
+		}
+	})
+
+	t.Run("parent with children", func(t *testing.T) {
+		parent := makeSession("parent", "", db.StatusWorking, 0)
+		child1 := makeSession("child1", "parent", db.StatusCompleted, 1)
+		child2 := makeSession("child2", "parent", db.StatusWorking, 2)
+		sessions := []*db.Session{child2, parent, child1} // shuffled
+
+		nodes := buildSessionTree(sessions)
+		if len(nodes) != 3 {
+			t.Fatalf("expected 3 nodes, got %d", len(nodes))
+		}
+		if nodes[0].session.ID != "parent" {
+			t.Errorf("expected parent first, got %s", nodes[0].session.ID)
+		}
+		if nodes[1].session.ID != "child1" {
+			t.Errorf("expected child1 second (oldest), got %s", nodes[1].session.ID)
+		}
+		if nodes[2].session.ID != "child2" {
+			t.Errorf("expected child2 third, got %s", nodes[2].session.ID)
+		}
+		if nodes[0].depth != 0 {
+			t.Errorf("parent depth: got %d, want 0", nodes[0].depth)
+		}
+		if nodes[1].depth != 1 {
+			t.Errorf("child1 depth: got %d, want 1", nodes[1].depth)
+		}
+	})
+
+	t.Run("orphaned child treated as top-level", func(t *testing.T) {
+		orphan := makeSession("orphan", "missing-parent", db.StatusCompleted, 0)
+		nodes := buildSessionTree([]*db.Session{orphan})
+		if len(nodes) != 1 {
+			t.Fatalf("expected 1 node, got %d", len(nodes))
+		}
+		if nodes[0].depth != 0 {
+			t.Errorf("orphan depth: got %d, want 0", nodes[0].depth)
+		}
+	})
+
+	t.Run("grandchild nesting", func(t *testing.T) {
+		parent := makeSession("p", "", db.StatusWorking, 0)
+		child := makeSession("c", "p", db.StatusWorking, 1)
+		grand := makeSession("g", "c", db.StatusCompleted, 2)
+		nodes := buildSessionTree([]*db.Session{grand, child, parent})
+		if len(nodes) != 3 {
+			t.Fatalf("expected 3 nodes, got %d", len(nodes))
+		}
+		if nodes[2].depth != 2 {
+			t.Errorf("grandchild depth: got %d, want 2", nodes[2].depth)
+		}
+	})
+
+	t.Run("completed child of running parent stays inRunning", func(t *testing.T) {
+		parent := makeSession("p", "", db.StatusWorking, 0)
+		child := makeSession("c", "p", db.StatusCompleted, 1)
+		nodes := buildSessionTree([]*db.Session{parent, child})
+		if !nodes[1].inRunning {
+			t.Error("completed child of running parent should be inRunning")
+		}
+	})
+
+	t.Run("completed child of completed parent is not inRunning", func(t *testing.T) {
+		parent := makeSession("p", "", db.StatusCompleted, 0)
+		child := makeSession("c", "p", db.StatusCompleted, 1)
+		nodes := buildSessionTree([]*db.Session{parent, child})
+		if nodes[0].inRunning {
+			t.Error("completed parent should not be inRunning")
+		}
+		if nodes[1].inRunning {
+			t.Error("completed child of completed parent should not be inRunning")
+		}
+	})
+
+	t.Run("running child of completed parent is inRunning itself", func(t *testing.T) {
+		parent := makeSession("p", "", db.StatusCompleted, 0)
+		child := makeSession("c", "p", db.StatusWorking, 1)
+		nodes := buildSessionTree([]*db.Session{parent, child})
+		// Parent is completed with no running ancestor: not inRunning
+		if nodes[0].inRunning {
+			t.Error("completed parent with no running ancestor should not be inRunning")
+		}
+		// Child is running itself: inRunning regardless of parent
+		if !nodes[1].inRunning {
+			t.Error("running child should be inRunning")
+		}
+	})
+}
+
 // setupTestDB creates a temporary database for testing
 func setupTestDB(t *testing.T) *db.DB {
 	t.Helper()

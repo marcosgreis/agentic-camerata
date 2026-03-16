@@ -34,6 +34,17 @@ var phaseMapping = map[string]struct {
 	"review":       {claude.CommandReview, db.WorkflowReview},
 }
 
+// phaseModels maps phase types to their default model.
+var phaseModels = map[string]string{
+	"research":     "opus",
+	"plan":         "opus",
+	"implement":    "sonnet",
+	"new":          "opus",
+	"fix":          "opus",
+	"look-and-fix": "opus",
+	"review":       "opus",
+}
+
 // Run executes the play command
 func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 	pb, err := playbook.Parse(c.Playbook)
@@ -164,6 +175,7 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 			Command:         mapping.Command,
 			WorkflowType:    mapping.Workflow,
 			TaskDescription: task,
+			Model:           cli.ResolveModel(phaseModels[phase.Type]),
 			AutoTerminate:   i < total-1,
 			AutonomousMode:  cli.Autonomous,
 			CapturedFiles:   &phaseCaptured,

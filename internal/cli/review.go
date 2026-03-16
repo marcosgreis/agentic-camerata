@@ -31,6 +31,7 @@ func (c *ReviewCmd) Run(cli *CLI) error {
 		Command:         claude.CommandReview,
 		WorkflowType:    db.WorkflowReview,
 		TaskDescription: focus,
+		Model:           cli.ResolveModel("opus"),
 		AutonomousMode:  cli.Autonomous,
 	})
 }

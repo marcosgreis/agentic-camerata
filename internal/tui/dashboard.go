@@ -295,7 +295,10 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else if d.viewMode == viewNormal && d.focus == focusList && len(d.sessions) > 0 && d.selected < len(d.sessions) {
 				// Jump to session - only in normal view (can't jump to deleted sessions)
-				session := d.sessions[d.selected]
+				session := d.normalViewSession(d.selected)
+				if session == nil {
+					break
+				}
 				loc := tmux.Location{
 					Session: session.TmuxSession,
 					Window:  session.TmuxWindow,
@@ -374,7 +377,10 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "s":
 			// Stop (kill) selected session - only in normal view
 			if d.viewMode == viewNormal && d.focus == focusList && len(d.sessions) > 0 && d.selected < len(d.sessions) {
-				session := d.sessions[d.selected]
+				session := d.normalViewSession(d.selected)
+				if session == nil {
+					break
+				}
 				// Only kill if running
 				if session.Status == db.StatusWaiting || session.Status == db.StatusWorking {
 					if session.PID > 0 {
@@ -388,7 +394,10 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "D":
 			// Delete (soft-delete) selected session - only in normal view
 			if d.viewMode == viewNormal && d.focus == focusList && len(d.sessions) > 0 && d.selected < len(d.sessions) {
-				session := d.sessions[d.selected]
+				session := d.normalViewSession(d.selected)
+				if session == nil {
+					break
+				}
 				// Stop process if running before deleting
 				if session.PID > 0 && (session.Status == db.StatusWaiting || session.Status == db.StatusWorking) {
 					syscall.Kill(session.PID, syscall.SIGKILL)
@@ -516,7 +525,16 @@ func (d *Dashboard) updateInfoContent() {
 		return
 	}
 
-	session := d.sessions[d.selected]
+	var session *db.Session
+	if d.viewMode == viewNormal {
+		session = d.normalViewSession(d.selected)
+	} else {
+		session = d.sessions[d.selected]
+	}
+	if session == nil {
+		d.infoViewport.SetContent("No session selected")
+		return
+	}
 	d.infoViewport.SetContent(d.formatSessionInfo(session))
 }
 
@@ -748,7 +766,7 @@ func (d *Dashboard) renderSessionList() string {
 				}
 
 				isSelected := i == d.selected
-				line := d.formatSessionLine(s, cols, isSelected, true) // Always dim in trash
+				line := d.formatSessionLine(s, cols, isSelected, true, 0) // Always dim in trash
 
 				if isSelected {
 					content.WriteString(selectionIndicatorStyle.Render(">") + " " + line + "\n")
@@ -769,13 +787,15 @@ func (d *Dashboard) renderSessionList() string {
 			content.WriteString(columnHeaderStyle.Render(headerLine))
 			content.WriteString("\n")
 
-			// Split sessions into running (waiting/working) and history
-			var runningSessions, historySessions []*db.Session
-			for _, s := range d.sessions {
-				if s.Status == db.StatusWaiting || s.Status == db.StatusWorking {
-					runningSessions = append(runningSessions, s)
+			nodes := buildSessionTree(d.sessions)
+
+			// Split into running and history node lists (preserving tree order within each)
+			var runningNodes, historyNodes []sessionNode
+			for _, n := range nodes {
+				if n.inRunning {
+					runningNodes = append(runningNodes, n)
 				} else {
-					historySessions = append(historySessions, s)
+					historyNodes = append(historyNodes, n)
 				}
 			}
 
@@ -783,22 +803,23 @@ func (d *Dashboard) renderSessionList() string {
 			maxLines := height - 4
 
 			// Render running sessions section
-			sectionHeader := sectionActiveHeader.Width(width - 4).Render(fmt.Sprintf("● RUNNING (%d)", len(runningSessions)))
+			sectionHeader := sectionActiveHeader.Width(width - 4).Render(fmt.Sprintf("● RUNNING (%d)", len(runningNodes)))
 			content.WriteString(sectionHeader)
 			content.WriteString("\n")
 			lineCount++
 
-			if len(runningSessions) > 0 {
-				for i, s := range runningSessions {
+			if len(runningNodes) > 0 {
+				for i, n := range runningNodes {
 					if lineCount >= maxLines {
-						content.WriteString(fmt.Sprintf("  ... and %d more\n", len(runningSessions)-i))
+						content.WriteString(fmt.Sprintf("  ... and %d more\n", len(runningNodes)-i))
 						lineCount++
 						break
 					}
 
 					globalIdx := i
 					isSelected := globalIdx == d.selected
-					line := d.formatSessionLine(s, cols, isSelected, false)
+					inHistoryStyle := !isRunning(n.session)
+					line := d.formatSessionLine(n.session, cols, isSelected, inHistoryStyle, n.depth)
 
 					if isSelected {
 						content.WriteString(selectionIndicatorStyle.Render(">") + " " + line + "\n")
@@ -814,21 +835,21 @@ func (d *Dashboard) renderSessionList() string {
 
 			// Render history section
 			if lineCount < maxLines {
-				sectionHeader := sectionHistoryHeader.Width(width - 4).Render(fmt.Sprintf("○ HISTORY (%d)", len(historySessions)))
+				sectionHeader := sectionHistoryHeader.Width(width - 4).Render(fmt.Sprintf("○ HISTORY (%d)", len(historyNodes)))
 				content.WriteString(sectionHeader)
 				content.WriteString("\n")
 				lineCount++
 
-				if len(historySessions) > 0 {
-					for i, s := range historySessions {
+				if len(historyNodes) > 0 {
+					for i, n := range historyNodes {
 						if lineCount >= maxLines {
-							content.WriteString(fmt.Sprintf("  ... and %d more\n", len(historySessions)-i))
+							content.WriteString(fmt.Sprintf("  ... and %d more\n", len(historyNodes)-i))
 							break
 						}
 
-						globalIdx := len(runningSessions) + i
+						globalIdx := len(runningNodes) + i
 						isSelected := globalIdx == d.selected
-						line := d.formatSessionLine(s, cols, isSelected, true)
+						line := d.formatSessionLine(n.session, cols, isSelected, true, n.depth)
 
 						if isSelected {
 							content.WriteString(selectionIndicatorStyle.Render(">") + " " + line + "\n")
@@ -887,7 +908,10 @@ func (d *Dashboard) formatHeaderLine(cols visibleColumns) string {
 // formatSessionLine formats a single session for display with aligned columns
 // When selected is true, colors are kept but without full-row background change
 // When inHistory is true, dimmed color variants are used
-func (d *Dashboard) formatSessionLine(s *db.Session, cols visibleColumns, selected bool, inHistory bool) string {
+// depth controls the indentation level (2 spaces per level)
+func (d *Dashboard) formatSessionLine(s *db.Session, cols visibleColumns, selected bool, inHistory bool, depth int) string {
+	indent := strings.Repeat("  ", depth)
+
 	// Truncate or pad ID
 	id := s.ID
 	if len(id) > colIDWidth {
@@ -918,10 +942,11 @@ func (d *Dashboard) formatSessionLine(s *db.Session, cols visibleColumns, select
 	// Format with colors - use dimmed variants for history section
 	var parts []string
 	if cols.id {
+		idField := indent + fmt.Sprintf("%-*s", colIDWidth, id)
 		if inHistory {
-			parts = append(parts, dimIDStyle.Render(fmt.Sprintf("%-*s", colIDWidth, id)))
+			parts = append(parts, dimIDStyle.Render(idField))
 		} else {
-			parts = append(parts, fmt.Sprintf("%-*s", colIDWidth, id))
+			parts = append(parts, idField)
 		}
 	}
 	if cols.status {
@@ -957,7 +982,11 @@ func (d *Dashboard) formatSessionLine(s *db.Session, cols visibleColumns, select
 		}
 	}
 	if cols.prompt {
-		parts = append(parts, dimStyle.Render("     "+prompt))
+		if inHistory {
+			parts = append(parts, dimStyle.Render("     "+prompt))
+		} else {
+			parts = append(parts, baseStyle.Render("     "+prompt))
+		}
 	}
 
 	return strings.Join(parts, " ")
@@ -1055,6 +1084,20 @@ func (d *Dashboard) listLen() int {
 		return len(sortedTodos(d.todos))
 	}
 	return len(d.sessions)
+}
+
+// normalViewNodes returns the tree-ordered node list for the normal view.
+func (d *Dashboard) normalViewNodes() []sessionNode {
+	return buildSessionTree(d.sessions)
+}
+
+// normalViewSession returns the session at the given tree-ordered index for the normal view.
+func (d *Dashboard) normalViewSession(idx int) *db.Session {
+	nodes := d.normalViewNodes()
+	if idx >= 0 && idx < len(nodes) {
+		return nodes[idx].session
+	}
+	return nil
 }
 
 // ensureVenueSelectionVisible adjusts venueScrollRow so the selected venue's
@@ -1167,6 +1210,91 @@ func openURL(url string) {
 		return
 	}
 	cmd.Start()
+}
+
+// sessionNode represents a session with its computed display properties
+// after parent-child relationships are resolved.
+type sessionNode struct {
+	session   *db.Session
+	depth     int  // indent level (0 = top-level, 1 = child, 2 = grandchild, ...)
+	inRunning bool // true if this node should appear in the RUNNING section
+}
+
+// isRunning returns true if the session is actively running.
+func isRunning(s *db.Session) bool {
+	return s.Status == db.StatusWaiting || s.Status == db.StatusWorking
+}
+
+// buildSessionTree converts a flat session list into an ordered []sessionNode
+// where children immediately follow their parent at depth+1.
+// Section membership (inRunning) is inherited from the topmost running ancestor.
+//
+// Rules:
+//   - A node is inRunning if it is running itself OR any ancestor is running.
+//   - Children are sorted by created_at ascending within siblings (oldest first).
+//   - Orphaned children (parent not in the map) are treated as top-level.
+func buildSessionTree(sessions []*db.Session) []sessionNode {
+	// Build lookup map: id -> session
+	byID := make(map[string]*db.Session, len(sessions))
+	for _, s := range sessions {
+		byID[s.ID] = s
+	}
+
+	// Separate top-level from children
+	var roots []*db.Session
+	children := make(map[string][]*db.Session) // parentID -> child sessions
+
+	for _, s := range sessions {
+		if s.ParentID == "" {
+			roots = append(roots, s)
+		} else if _, ok := byID[s.ParentID]; ok {
+			children[s.ParentID] = append(children[s.ParentID], s)
+		} else {
+			// Orphan: parent not in list → treat as top-level
+			roots = append(roots, s)
+		}
+	}
+
+	// Sort siblings by created_at ascending (chronological spawn order)
+	sortByCreatedAt := func(list []*db.Session) {
+		sort.Slice(list, func(i, j int) bool {
+			return list[i].CreatedAt.Before(list[j].CreatedAt)
+		})
+	}
+	sortByCreatedAt(roots)
+	for pid := range children {
+		sortByCreatedAt(children[pid])
+	}
+
+	// Sort roots: running first, then by created_at desc (matches existing UX)
+	sort.SliceStable(roots, func(i, j int) bool {
+		iRun := isRunning(roots[i])
+		jRun := isRunning(roots[j])
+		if iRun != jRun {
+			return iRun
+		}
+		return roots[i].CreatedAt.After(roots[j].CreatedAt)
+	})
+
+	// Pre-order DFS to build flat node list
+	var nodes []sessionNode
+	var walk func(s *db.Session, depth int, ancestorRunning bool)
+	walk = func(s *db.Session, depth int, ancestorRunning bool) {
+		running := ancestorRunning || isRunning(s)
+		nodes = append(nodes, sessionNode{
+			session:   s,
+			depth:     depth,
+			inRunning: running,
+		})
+		for _, child := range children[s.ID] {
+			walk(child, depth+1, running)
+		}
+	}
+	for _, r := range roots {
+		walk(r, 0, false)
+	}
+
+	return nodes
 }
 
 // sortSessions sorts sessions with running (waiting/working) first, then by creation time descending

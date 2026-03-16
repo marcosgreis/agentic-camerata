@@ -34,6 +34,7 @@ func (c *LookAndFixCmd) Run(cli *CLI) error {
 		Command:         claude.CommandLookAndFix,
 		WorkflowType:    db.WorkflowFix,
 		TaskDescription: issue,
+		Model:           cli.ResolveModel("opus"),
 		AutonomousMode:  cli.Autonomous,
 		CommentTag:      c.CommentTag,
 	})
