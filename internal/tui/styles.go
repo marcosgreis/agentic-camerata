@@ -82,6 +82,12 @@ var (
 	workflowReview = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#06B6D4")) // Cyan
 
+	workflowPlay = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#EC4899")) // Pink/Magenta
+
+	workflowPlayDim = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#BE185D")) // Darker pink
+
 	// Selection styles
 	selectedStyle = lipgloss.NewStyle().
 			Background(colorPrimary).
@@ -284,6 +290,8 @@ func WorkflowStyle(workflow string) lipgloss.Style {
 		return workflowImplement
 	case "review":
 		return workflowReview
+	case "play":
+		return workflowPlay
 	default:
 		return workflowGeneral
 	}
@@ -300,6 +308,8 @@ func WorkflowStyleDim(workflow string) lipgloss.Style {
 		return workflowImplementDim
 	case "review":
 		return workflowReviewDim
+	case "play":
+		return workflowPlayDim
 	default:
 		return workflowGeneralDim
 	}

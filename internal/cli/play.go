@@ -4,11 +4,15 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/agentic-camerata/cmt/internal/claude"
 	"github.com/agentic-camerata/cmt/internal/db"
 	"github.com/agentic-camerata/cmt/internal/playbook"
+	"github.com/agentic-camerata/cmt/internal/tmux"
 )
 
 // PlayCmd runs a multi-phase playbook workflow
@@ -31,16 +35,65 @@ var phaseMapping = map[string]struct {
 }
 
 // Run executes the play command
-func (c *PlayCmd) Run(cli *CLI) error {
+func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 	pb, err := playbook.Parse(c.Playbook)
 	if err != nil {
 		return err
 	}
 
-	runner, err := claude.NewRunner(cli.Database())
+	database := cli.Database()
+	runner, err := claude.NewRunner(database)
 	if err != nil {
 		return err
 	}
+
+	// Create parent play session
+	playbookPath, err := filepath.Abs(c.Playbook)
+	if err != nil {
+		return fmt.Errorf("resolve playbook path: %w", err)
+	}
+
+	sessionID := uuid.New().String()[:8]
+	loc, err := tmux.CurrentLocation()
+	if err != nil {
+		return fmt.Errorf("get tmux location: %w", err)
+	}
+	workDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("get home directory: %w", err)
+	}
+
+	outputDir := filepath.Join(homeDir, ".config", "cmt", "output")
+	os.MkdirAll(outputDir, 0755) //nolint:errcheck
+
+	session := &db.Session{
+		ID:               sessionID,
+		WorkflowType:     db.WorkflowPlay,
+		Status:           db.StatusWorking,
+		WorkingDirectory: workDir,
+		TaskDescription:  playbookPath,
+		Prefix:           os.Getenv("CMT_PREFIX"),
+		TmuxSession:      loc.Session,
+		TmuxWindow:       loc.Window,
+		TmuxPane:         loc.Pane,
+		OutputFile:       filepath.Join(outputDir, sessionID+".log"),
+		PID:              os.Getpid(),
+	}
+	if err := database.CreateSession(session); err != nil {
+		return fmt.Errorf("create play session: %w", err)
+	}
+
+	defer func() {
+		if retErr != nil {
+			database.UpdateSessionStatus(sessionID, db.StatusAbandoned)
+		} else {
+			database.UpdateSessionStatus(sessionID, db.StatusCompleted)
+		}
+	}()
 
 	// Scoped file tracking: each phase type only sees relevant files
 	var researchFiles []string              // files accumulated across all research phases (default behavior)
