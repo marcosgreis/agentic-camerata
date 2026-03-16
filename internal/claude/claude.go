@@ -70,6 +70,7 @@ type RunOptions struct {
 	SkipTracking    bool   // If true, skip DB session creation and activity monitoring
 	AutoTerminate   bool   // If true, send Ctrl+D when session goes idle after working
 	CapturedFiles   *[]string // If non-nil, collect thoughts/shared/*.md paths from output
+	ParentID        string    // Parent session ID (for play command phases)
 }
 
 // activityMonitor tracks PTY output to detect working/waiting states
@@ -198,6 +199,7 @@ func (r *Runner) Run(ctx context.Context, opts RunOptions) error {
 		TmuxWindow:       loc.Window,
 		TmuxPane:         loc.Pane,
 		OutputFile:       outputFile,
+		ParentID:         opts.ParentID,
 	}
 
 	// Store resumed Claude session ID if resuming a specific session

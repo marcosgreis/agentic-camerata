@@ -49,6 +49,7 @@ type Session struct {
 	OutputFile       string
 	PID              int
 	DeletedAt        *time.Time // nil if not deleted
+	ParentID         string     // ID of parent play session (empty if top-level)
 }
 
 // CreateSession creates a new session in the database
@@ -56,12 +57,12 @@ func (db *DB) CreateSession(s *Session) error {
 	query := `
 		INSERT INTO sessions (
 			id, workflow_type, status, working_directory, task_description, prefix,
-			claude_session_id, tmux_session, tmux_window, tmux_pane, output_file, pid
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			claude_session_id, tmux_session, tmux_window, tmux_pane, output_file, pid, parent_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := db.conn.Exec(query,
 		s.ID, s.WorkflowType, s.Status, s.WorkingDirectory, s.TaskDescription, s.Prefix,
-		s.ClaudeSessionID, s.TmuxSession, s.TmuxWindow, s.TmuxPane, s.OutputFile, s.PID,
+		s.ClaudeSessionID, s.TmuxSession, s.TmuxWindow, s.TmuxPane, s.OutputFile, s.PID, s.ParentID,
 	)
 	if err != nil {
 		return fmt.Errorf("insert session: %w", err)
@@ -74,7 +75,7 @@ func (db *DB) GetSession(id string) (*Session, error) {
 	query := `
 		SELECT id, created_at, updated_at, workflow_type, status, working_directory,
 		       task_description, prefix, claude_session_id, tmux_session, tmux_window, tmux_pane,
-		       output_file, pid, deleted_at
+		       output_file, pid, deleted_at, parent_id
 		FROM sessions WHERE id = ?
 	`
 	row := db.conn.QueryRow(query, id)
@@ -86,7 +87,7 @@ func (db *DB) GetLastSession() (*Session, error) {
 	query := `
 		SELECT id, created_at, updated_at, workflow_type, status, working_directory,
 		       task_description, prefix, claude_session_id, tmux_session, tmux_window, tmux_pane,
-		       output_file, pid, deleted_at
+		       output_file, pid, deleted_at, parent_id
 		FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1
 	`
 	row := db.conn.QueryRow(query)
@@ -103,7 +104,7 @@ func (db *DB) ListSessions(status SessionStatus) ([]*Session, error) {
 		query = `
 			SELECT id, created_at, updated_at, workflow_type, status, working_directory,
 			       task_description, prefix, claude_session_id, tmux_session, tmux_window, tmux_pane,
-			       output_file, pid, deleted_at
+			       output_file, pid, deleted_at, parent_id
 			FROM sessions WHERE status = ? ORDER BY created_at DESC, rowid DESC
 		`
 		args = append(args, status)
@@ -111,7 +112,7 @@ func (db *DB) ListSessions(status SessionStatus) ([]*Session, error) {
 		query = `
 			SELECT id, created_at, updated_at, workflow_type, status, working_directory,
 			       task_description, prefix, claude_session_id, tmux_session, tmux_window, tmux_pane,
-			       output_file, pid, deleted_at
+			       output_file, pid, deleted_at, parent_id
 			FROM sessions WHERE status != 'deleted' ORDER BY created_at DESC, rowid DESC
 		`
 	}
@@ -149,13 +150,14 @@ func (db *DB) UpdateSession(s *Session) error {
 			tmux_window = ?,
 			tmux_pane = ?,
 			output_file = ?,
-			pid = ?
+			pid = ?,
+			parent_id = ?
 		WHERE id = ?
 	`
 	_, err := db.conn.Exec(query,
 		s.WorkflowType, s.Status, s.WorkingDirectory, s.TaskDescription, s.Prefix,
 		s.ClaudeSessionID, s.TmuxSession, s.TmuxWindow, s.TmuxPane, s.OutputFile, s.PID,
-		s.ID,
+		s.ParentID, s.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update session: %w", err)
@@ -206,14 +208,14 @@ func (db *DB) DeleteSession(id string) error {
 // scanSession scans a single row into a Session
 func scanSession(row *sql.Row) (*Session, error) {
 	var s Session
-	var taskDesc, prefix, claudeID, outputFile sql.NullString
+	var taskDesc, prefix, claudeID, outputFile, parentID sql.NullString
 	var pid sql.NullInt64
 	var deletedAt sql.NullTime
 
 	err := row.Scan(
 		&s.ID, &s.CreatedAt, &s.UpdatedAt, &s.WorkflowType, &s.Status, &s.WorkingDirectory,
 		&taskDesc, &prefix, &claudeID, &s.TmuxSession, &s.TmuxWindow, &s.TmuxPane,
-		&outputFile, &pid, &deletedAt,
+		&outputFile, &pid, &deletedAt, &parentID,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -230,6 +232,7 @@ func scanSession(row *sql.Row) (*Session, error) {
 	if deletedAt.Valid {
 		s.DeletedAt = &deletedAt.Time
 	}
+	s.ParentID = parentID.String
 
 	return &s, nil
 }
@@ -237,14 +240,14 @@ func scanSession(row *sql.Row) (*Session, error) {
 // scanSessionRows scans rows into a Session
 func scanSessionRows(rows *sql.Rows) (*Session, error) {
 	var s Session
-	var taskDesc, prefix, claudeID, outputFile sql.NullString
+	var taskDesc, prefix, claudeID, outputFile, parentID sql.NullString
 	var pid sql.NullInt64
 	var deletedAt sql.NullTime
 
 	err := rows.Scan(
 		&s.ID, &s.CreatedAt, &s.UpdatedAt, &s.WorkflowType, &s.Status, &s.WorkingDirectory,
 		&taskDesc, &prefix, &claudeID, &s.TmuxSession, &s.TmuxWindow, &s.TmuxPane,
-		&outputFile, &pid, &deletedAt,
+		&outputFile, &pid, &deletedAt, &parentID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("scan session: %w", err)
@@ -258,6 +261,7 @@ func scanSessionRows(rows *sql.Rows) (*Session, error) {
 	if deletedAt.Valid {
 		s.DeletedAt = &deletedAt.Time
 	}
+	s.ParentID = parentID.String
 
 	return &s, nil
 }
@@ -267,7 +271,7 @@ func (db *DB) ListDeletedSessions() ([]*Session, error) {
 	query := `
 		SELECT id, created_at, updated_at, workflow_type, status, working_directory,
 		       task_description, prefix, claude_session_id, tmux_session, tmux_window, tmux_pane,
-		       output_file, pid, deleted_at
+		       output_file, pid, deleted_at, parent_id
 		FROM sessions WHERE status = 'deleted' ORDER BY deleted_at DESC, rowid DESC
 	`
 

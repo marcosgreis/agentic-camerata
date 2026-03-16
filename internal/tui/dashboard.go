@@ -571,6 +571,23 @@ func (d *Dashboard) formatSessionInfo(session *db.Session) string {
 	content.WriteString(fmt.Sprintf("Tmux Location:     %s:%d.%d\n", session.TmuxSession, session.TmuxWindow, session.TmuxPane))
 	content.WriteString(fmt.Sprintf("Output File:       %s\n", session.OutputFile))
 	content.WriteString(fmt.Sprintf("PID:               %d\n", session.PID))
+
+	// Show parent info if this is a child session
+	if session.ParentID != "" {
+		content.WriteString(fmt.Sprintf("Parent ID:         %s\n", session.ParentID))
+		content.WriteString("\n")
+		content.WriteString("─── Parent (Play Session) ────────────────\n")
+		content.WriteString("\n")
+		if parent, err := d.db.GetSession(session.ParentID); err == nil && parent != nil {
+			content.WriteString(fmt.Sprintf("Parent Status:     %s\n", parent.Status))
+			content.WriteString(fmt.Sprintf("Playbook:          %s\n", parent.TaskDescription))
+			content.WriteString(fmt.Sprintf("Parent Created:    %s\n", parent.CreatedAt.Format(time.RFC3339)))
+			content.WriteString(fmt.Sprintf("Parent Tmux:       %s:%d.%d\n", parent.TmuxSession, parent.TmuxWindow, parent.TmuxPane))
+		} else {
+			content.WriteString("(Parent session not found)\n")
+		}
+	}
+
 	content.WriteString("\n")
 	content.WriteString("─── Prompt ───────────────────────────────\n")
 	content.WriteString("\n")

@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- Output tracking
     output_file TEXT,
     pid INTEGER,
-    deleted_at DATETIME
+    deleted_at DATETIME,
+    parent_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);

@@ -136,6 +136,15 @@ func Open(path string) (*DB, error) {
 		}
 	}
 
+	// Add parent_id column if it doesn't exist (for existing databases)
+	_, err = conn.Exec(`ALTER TABLE sessions ADD COLUMN parent_id TEXT`)
+	if err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			conn.Close()
+			return nil, fmt.Errorf("migrate parent_id column: %w", err)
+		}
+	}
+
 	// Recover stuck sessions: working sessions with dead PIDs should be marked as abandoned
 	rows, err := conn.Query(`SELECT id, pid FROM sessions WHERE status = 'working' AND pid IS NOT NULL`)
 	if err != nil {

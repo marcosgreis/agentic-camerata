@@ -167,6 +167,7 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 			AutoTerminate:   i < total-1,
 			AutonomousMode:  cli.Autonomous,
 			CapturedFiles:   &phaseCaptured,
+			ParentID:        sessionID,
 		})
 		if err != nil {
 			return fmt.Errorf("phase %d (%s): %w", i+1, phase.Type, err)
