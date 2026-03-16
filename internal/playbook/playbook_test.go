@@ -165,6 +165,9 @@ look and fix
 
 ## Review
 review changes
+
+## Play
+testdata/nested.md
 `,
 			want: []Phase{
 				{Type: "new", Content: "general"},
@@ -174,7 +177,55 @@ review changes
 				{Type: "fix", Content: "fix"},
 				{Type: "look-and-fix", Content: "look and fix"},
 				{Type: "review", Content: "review changes"},
+				{Type: "play", Content: "testdata/nested.md"},
 			},
+		},
+		{
+			name: "play phase with valid file",
+			content: `## Research
+Explore first.
+
+## Play
+testdata/nested.md
+
+## Implement
+Build it.
+`,
+			want: []Phase{
+				{Type: "research", Content: "Explore first."},
+				{Type: "play", Content: "testdata/nested.md"},
+				{Type: "implement", Content: "Build it."},
+			},
+		},
+		{
+			name:    "play phase with empty content",
+			content: "## Play\n",
+			wantErr: true,
+		},
+		{
+			name:    "play phase with multiline content",
+			content: "## Play\nfile1.md\nfile2.md\n",
+			wantErr: true,
+		},
+		{
+			name:    "play phase with non-md file",
+			content: "## Play\nplaybook_test.go\n",
+			wantErr: true,
+		},
+		{
+			name:    "play phase with nonexistent file",
+			content: "## Play\nnonexistent.md\n",
+			wantErr: true,
+		},
+		{
+			name:    "play phase with directory path",
+			content: "## Play\ntestdata/fakedir.md\n",
+			wantErr: true,
+		},
+		{
+			name:    "play phase with tag not allowed",
+			content: "## Play\ntag: mytag\ntestdata/nested.md\n",
+			wantErr: true,
 		},
 		{
 			name: "exit phase terminates playbook",

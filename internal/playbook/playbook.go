@@ -30,6 +30,7 @@ var validPhaseTypes = map[string]string{
 	"look-and-fix": "look-and-fix",
 	"review":       "review",
 	"exit":         "exit",
+	"play":         "play",
 }
 
 // Parse reads a playbook markdown file and extracts phases
@@ -70,7 +71,7 @@ func ParseContent(content string) (*Playbook, error) {
 
 			phaseType, ok := validPhaseTypes[normalized]
 			if !ok {
-				return nil, fmt.Errorf("unknown phase type: %q (valid: research, plan, implement, new, fix, look-and-fix, review, exit)", heading)
+				return nil, fmt.Errorf("unknown phase type: %q (valid: research, plan, implement, new, fix, look-and-fix, review, play, exit)", heading)
 			}
 
 			currentType = phaseType
@@ -107,6 +108,32 @@ func ParseContent(content string) (*Playbook, error) {
 				return nil, fmt.Errorf("duplicate phase tag: %q", p.Tag)
 			}
 			seen[p.Tag] = true
+		}
+	}
+
+	// Validate play phases: must have a single-line .md file path, no metadata
+	for i, p := range phases {
+		if p.Type != "play" {
+			continue
+		}
+		if p.Tag != "" || len(p.Uses) > 0 || len(p.Include) > 0 {
+			return nil, fmt.Errorf("phase %d (play): metadata (tag/uses/include) not allowed on play phases", i+1)
+		}
+		if p.Content == "" {
+			return nil, fmt.Errorf("phase %d (play): missing playbook file path", i+1)
+		}
+		if strings.Contains(p.Content, "\n") {
+			return nil, fmt.Errorf("phase %d (play): content must be a single file path, got multiple lines", i+1)
+		}
+		if !strings.HasSuffix(p.Content, ".md") {
+			return nil, fmt.Errorf("phase %d (play): file must be a .md file: %s", i+1, p.Content)
+		}
+		info, err := os.Stat(p.Content)
+		if err != nil {
+			return nil, fmt.Errorf("phase %d (play): file not found: %s", i+1, p.Content)
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("phase %d (play): path is a directory: %s", i+1, p.Content)
 		}
 	}
 
