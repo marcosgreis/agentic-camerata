@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -10,6 +11,30 @@ import (
 
 	"github.com/agentic-camerata/cmt/internal/db"
 )
+
+var (
+	// Matches link markup: <url|label> or <url>
+	slackLinkRe = regexp.MustCompile(`<(https?://[^|>]+)\|([^>]+)>`)
+	slackURLRe  = regexp.MustCompile(`<(https?://[^>]+)>`)
+	// Matches emoji codes: :emoji_name:
+	slackEmojiRe = regexp.MustCompile(`:[a-zA-Z0-9_+-]+:`)
+)
+
+// cleanMarkup strips formatting from text for terminal display.
+// Converts <url|label> to label, <url> to url, and removes :emoji: codes.
+func cleanMarkup(s string) string {
+	// Replace <url|label> with label first (more specific pattern)
+	s = slackLinkRe.ReplaceAllString(s, "$2")
+	// Replace <url> with url
+	s = slackURLRe.ReplaceAllString(s, "$1")
+	// Remove emoji codes
+	s = slackEmojiRe.ReplaceAllString(s, "")
+	// Clean up any resulting double spaces
+	for strings.Contains(s, "  ") {
+		s = strings.ReplaceAll(s, "  ", " ")
+	}
+	return strings.TrimSpace(s)
+}
 
 // sortedTodos returns todos with TodoStatusTodo first, then TodoStatusDone,
 // sorted by date ascending (nulls last) within each group.
@@ -201,8 +226,9 @@ func (d *Dashboard) formatTodoLine(item *db.Todo, summaryWidth int) string {
 		sourceStr = truncateToWidth(*item.Source, todoColSourceWidth)
 	}
 
-	// Summary (show only first line in table)
+	// Summary (show only first line in table, clean markup)
 	summary, _, _ := strings.Cut(item.Summary, "\n")
+	summary = cleanMarkup(summary)
 	summary = truncateToWidth(summary, summaryWidth)
 
 	if item.Status == db.TodoStatusDone {
@@ -231,7 +257,7 @@ func (d *Dashboard) formatTodoInfo(item *db.Todo) string {
 	}
 
 	// Summary
-	b.WriteString(fmt.Sprintf("Summary: %s\n", item.Summary))
+	b.WriteString(fmt.Sprintf("Summary: %s\n", cleanMarkup(item.Summary)))
 
 	// Nullable fields
 	if item.Date != nil {
@@ -271,7 +297,7 @@ func (d *Dashboard) formatTodoInfo(item *db.Todo) string {
 	}
 
 	if item.FullMessage != nil {
-		b.WriteString(fmt.Sprintf("Message: %s\n", *item.FullMessage))
+		b.WriteString(fmt.Sprintf("Message: %s\n", cleanMarkup(*item.FullMessage)))
 	} else {
 		b.WriteString("Message: \u2014\n")
 	}

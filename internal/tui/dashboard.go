@@ -306,18 +306,6 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				// Jump to the pane - dashboard stays running in its pane
 				tmux.JumpTo(loc)
-			} else if d.viewMode == viewTodos && d.focus == focusList {
-				items := sortedTodos(d.todos)
-				if d.selected < len(items) {
-					item := items[d.selected]
-					if item.Status == db.TodoStatusTodo {
-						item.Status = db.TodoStatusDone
-					} else {
-						item.Status = db.TodoStatusTodo
-					}
-					d.db.UpdateTodo(item)
-					cmds = append(cmds, d.loadTodos)
-				}
 			}
 
 		case "esc", "backspace":
@@ -440,6 +428,21 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.selected = 0
 			d.venueScrollRow = 0
 			cmds = append(cmds, d.loadSessions)
+
+		case "c":
+			if d.viewMode == viewTodos && d.focus == focusList {
+				items := sortedTodos(d.todos)
+				if d.selected < len(items) {
+					item := items[d.selected]
+					if item.Status == db.TodoStatusTodo {
+						item.Status = db.TodoStatusDone
+					} else {
+						item.Status = db.TodoStatusTodo
+					}
+					d.db.UpdateTodo(item)
+					cmds = append(cmds, d.loadTodos)
+				}
+			}
 
 		case "t":
 			d.viewMode = viewTodos
@@ -1059,7 +1062,7 @@ func (d *Dashboard) renderHelp() string {
 	case viewVenues:
 		help = "h/j/k/l: navigate • enter: expand • V: back to sessions • r: refresh • q: quit"
 	case viewTodos:
-		help = "j/k: navigate • enter: toggle done • o: open url • D: delete • i: toggle info • esc: back • r: refresh • q: quit"
+		help = "j/k: navigate • c: toggle done • o: open url • D: delete • i: toggle info • esc: back • r: refresh • q: quit"
 	case viewVenueExpanded:
 		if d.showDocViewer {
 			help = "j/k: navigate • tab: switch focus • o: close viewer • enter: jump • esc: back • q: quit"

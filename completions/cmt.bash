@@ -7,7 +7,7 @@ _cmt_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    local commands="new research plan implement fix-test look-and-fix quick play sessions jump dashboard todo"
+    local commands="new research plan implement review fix-test look-and-fix quick play sessions jump dashboard todo"
     local global_opts="-d --db -v --verbose -a --autonomous -h --help"
     local file_opts="-f --files -d --dirs -t --thoughts"
 
@@ -32,7 +32,6 @@ _cmt_completions() {
             esac
             ;;
         research)
-            # research <topic> [-f file] [-d dir] [-t]
             case "$prev" in
                 -f|--files)
                     COMPREPLY=($(compgen -f -- "$cur"))
@@ -48,7 +47,6 @@ _cmt_completions() {
             esac
             ;;
         plan)
-            # plan <task> [-f file] [-d dir] [-t]
             case "$prev" in
                 -f|--files)
                     COMPREPLY=($(compgen -f -- "$cur"))
@@ -64,7 +62,6 @@ _cmt_completions() {
             esac
             ;;
         implement)
-            # implement [<plan>] [-f file] [-d dir] [-t]
             case "$prev" in
                 -f|--files)
                     COMPREPLY=($(compgen -f -- "$cur"))
@@ -82,8 +79,22 @@ _cmt_completions() {
                     ;;
             esac
             ;;
+        review)
+            case "$prev" in
+                -f|--files)
+                    COMPREPLY=($(compgen -f -- "$cur"))
+                    ;;
+                -d|--dirs)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    ;;
+                *)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "$file_opts" -- "$cur"))
+                    fi
+                    ;;
+            esac
+            ;;
         fix-test)
-            # fix-test <test> [-f file] [-d dir] [-t]
             case "$prev" in
                 -f|--files)
                     COMPREPLY=($(compgen -f -- "$cur"))
@@ -121,9 +132,9 @@ _cmt_completions() {
             COMPREPLY=()
             ;;
         play)
-            # play <playbook> - complete with markdown files
+            # play <playbook> - complete with any file or directory
             if [[ $COMP_CWORD -eq 2 ]]; then
-                COMPREPLY=($(compgen -f -X '!*.md' -- "$cur"))
+                COMPREPLY=($(compgen -f -- "$cur"))
             fi
             ;;
         sessions)

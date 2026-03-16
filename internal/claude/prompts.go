@@ -25,7 +25,7 @@ var promptPrefixes = map[CommandType]string{
 	CommandFixTest:    "Analyze and fix the failing test at: ",
 	CommandLookAndFix: "Take a look at this repo and search for comments tagged with %s and propose how to solve them. If a class name or filename is provided as a parameter, focus the search on that specific file or class.",
 	CommandQuick:      "",
-	CommandReview:     "Review the changes in this working directory. Examine git diff (unstaged changes), git diff --staged (staged changes), and recent git log to understand what has changed. Provide a structured code review covering: correctness, potential bugs, code quality, naming, and any suggestions for improvement. If additional context is provided, focus the review on that area. Create a markdown file in thoughts/shared/reviews/ with the suggestions. DO NOT make any changes",
+	CommandReview:     "/review_code",
 }
 
 // GetPromptPrefix returns the prompt prefix for a command type.
