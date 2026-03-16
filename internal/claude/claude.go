@@ -402,6 +402,10 @@ func (r *Runner) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sess
 		}()
 	}
 
+	// done is closed when runWithPTY returns to signal goroutines to stop
+	done := make(chan struct{})
+	defer close(done)
+
 	// File capture dedup set
 	capturedSeen := map[string]bool{}
 
@@ -438,12 +442,20 @@ func (r *Runner) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sess
 	}()
 
 	// stdin -> PTY (with Ctrl+Z interception)
+	// The goroutine checks `done` after each read so it stops when this phase ends,
+	// preventing leaked goroutines from stealing stdin across play phases.
 	go func() {
 		buf := make([]byte, 1024)
 		for {
 			n, err := os.Stdin.Read(buf)
 			if err != nil {
 				return
+			}
+			// Exit if this phase has ended
+			select {
+			case <-done:
+				return
+			default:
 			}
 			// Scan for Ctrl+Z (0x1a) bytes
 			start := 0
