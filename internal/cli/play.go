@@ -112,10 +112,31 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 	taggedFiles := make(map[string][]string) // tag → captured files (for explicit references)
 	total := len(pb.Phases)
 
-	for i, phase := range pb.Phases {
+	for i := 0; i < len(pb.Phases); i++ {
+		phase := pb.Phases[i]
+		total = len(pb.Phases)
+
 		if phase.Type == "exit" {
 			fmt.Printf("\n=== Phase %d/%d: exit ===\n", i+1, total)
 			break
+		}
+
+		// Handle nested play phases by inlining the referenced playbook's phases
+		if phase.Type == "play" {
+			fmt.Printf("\n=== Phase %d/%d: play %s ===\n", i+1, total, phase.Content)
+			nestedPB, err := playbook.Parse(phase.Content)
+			if err != nil {
+				return fmt.Errorf("phase %d (play): %w", i+1, err)
+			}
+			// Replace the play phase with the nested playbook's phases
+			expanded := make([]playbook.Phase, 0, len(pb.Phases)-1+len(nestedPB.Phases))
+			expanded = append(expanded, pb.Phases[:i]...)
+			expanded = append(expanded, nestedPB.Phases...)
+			expanded = append(expanded, pb.Phases[i+1:]...)
+			pb.Phases = expanded
+			// Re-process current index (now points to first nested phase)
+			i--
+			continue
 		}
 
 		mapping, ok := phaseMapping[phase.Type]
