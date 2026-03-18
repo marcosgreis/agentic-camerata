@@ -470,9 +470,11 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		d.err = msg.err
 		// Sort sessions: active first, then by created_at desc
 		d.sessions = sortSessions(msg.sessions)
-		// Clamp selection if list shrunk
-		if d.selected >= len(d.sessions) && len(d.sessions) > 0 {
-			d.selected = len(d.sessions) - 1
+		// Clamp selection if list shrunk (only in session-based views)
+		if d.viewMode == viewNormal || d.viewMode == viewTrash {
+			if d.selected >= len(d.sessions) && len(d.sessions) > 0 {
+				d.selected = len(d.sessions) - 1
+			}
 		}
 		d.updateInfoContent()
 		// Rebuild expanded items if viewing a venue

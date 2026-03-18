@@ -136,6 +136,20 @@ func Open(path string) (*DB, error) {
 		}
 	}
 
+	// Add deleted_at column to todos if it doesn't exist
+	_, err = conn.Exec(`ALTER TABLE todos ADD COLUMN deleted_at DATETIME`)
+	if err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			conn.Close()
+			return nil, fmt.Errorf("migrate todos deleted_at column: %w", err)
+		}
+	}
+	_, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_todos_deleted ON todos(deleted_at)`)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("create todos deleted_at index: %w", err)
+	}
+
 	// Add parent_id column if it doesn't exist (for existing databases)
 	_, err = conn.Exec(`ALTER TABLE sessions ADD COLUMN parent_id TEXT`)
 	if err != nil {

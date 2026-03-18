@@ -94,3 +94,37 @@ func SelectMarkdownFile(dir string) (string, error) {
 func SelectPlanFile() (string, error) {
 	return SelectMarkdownFile(PlansDir)
 }
+
+// LatestPlanFile returns the most recently modified .md file in the plans directory
+func LatestPlanFile() (string, error) {
+	return LatestMarkdownFile(PlansDir)
+}
+
+// LatestMarkdownFile returns the most recently modified .md file in the given directory
+func LatestMarkdownFile(dir string) (string, error) {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return "", fmt.Errorf("directory not found: %s", dir)
+	}
+
+	var latest string
+	var latestTime int64
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(path, ".md") {
+			if mt := info.ModTime().UnixNano(); latest == "" || mt > latestTime {
+				latest = path
+				latestTime = mt
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("walk directory: %w", err)
+	}
+	if latest == "" {
+		return "", fmt.Errorf("no .md files found in %s", dir)
+	}
+	return latest, nil
+}

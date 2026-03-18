@@ -76,7 +76,7 @@ func (c *TodoAddCmd) Run(cli *CLI) error {
 
 // TodoListCmd lists todos
 type TodoListCmd struct {
-	Status string `short:"s" help:"Filter by status: todo, done, all" default:"todo"`
+	Status string `short:"s" help:"Filter by status: todo, done, deleted, all" default:"todo"`
 }
 
 func (c *TodoListCmd) Run(cli *CLI) error {
@@ -88,8 +88,10 @@ func (c *TodoListCmd) Run(cli *CLI) error {
 		status = db.TodoStatusTodo
 	case "done":
 		status = db.TodoStatusDone
+	case "deleted":
+		status = db.TodoStatusDeleted
 	default:
-		return fmt.Errorf("invalid status %q: must be todo, done, or all", c.Status)
+		return fmt.Errorf("invalid status %q: must be todo, done, deleted, or all", c.Status)
 	}
 
 	todos, err := cli.Database().ListTodos(status)

@@ -13,6 +13,7 @@ type Phase struct {
 	Tag     string   // optional tag for referencing this phase's outputs
 	Uses    []string // optional tags of phases whose outputs to use
 	Include []string // optional file paths to prepend to the phase prompt
+	Pick    string   // "true" for fzf selector, "last" for latest file (implement only)
 }
 
 // Playbook represents a parsed playbook file
@@ -55,13 +56,14 @@ func ParseContent(content string) (*Playbook, error) {
 		if strings.HasPrefix(line, "## ") {
 			// Save previous phase if any
 			if currentType != "" {
-				tag, uses, include, rest := extractMetadata(currentLines)
+				tag, uses, include, pick, rest := extractMetadata(currentLines)
 				phases = append(phases, Phase{
 					Type:    currentType,
 					Content: strings.TrimSpace(strings.Join(rest, "\n")),
 					Tag:     tag,
 					Uses:    uses,
 					Include: include,
+					Pick:    pick,
 				})
 			}
 
@@ -86,13 +88,14 @@ func ParseContent(content string) (*Playbook, error) {
 
 	// Save last phase
 	if currentType != "" {
-		tag, uses, include, rest := extractMetadata(currentLines)
+		tag, uses, include, pick, rest := extractMetadata(currentLines)
 		phases = append(phases, Phase{
 			Type:    currentType,
 			Content: strings.TrimSpace(strings.Join(rest, "\n")),
 			Tag:     tag,
 			Uses:    uses,
 			Include: include,
+			Pick:    pick,
 		})
 	}
 
@@ -108,6 +111,19 @@ func ParseContent(content string) (*Playbook, error) {
 				return nil, fmt.Errorf("duplicate phase tag: %q", p.Tag)
 			}
 			seen[p.Tag] = true
+		}
+	}
+
+	// Validate pick is only used on implement phases with valid values
+	for i, p := range phases {
+		if p.Pick == "" {
+			continue
+		}
+		if p.Type != "implement" {
+			return nil, fmt.Errorf("phase %d (%s): pick is only valid on implement phases", i+1, p.Type)
+		}
+		if p.Pick != "true" && p.Pick != "last" {
+			return nil, fmt.Errorf("phase %d (implement): invalid pick value %q (valid: true, last)", i+1, p.Pick)
 		}
 	}
 
@@ -153,9 +169,9 @@ func ParseContent(content string) (*Playbook, error) {
 	return &Playbook{Phases: phases}, nil
 }
 
-// extractMetadata parses tag:, uses:, and include: lines from the top of phase body lines.
-// Returns tag, uses, include, and remaining content lines with metadata stripped.
-func extractMetadata(lines []string) (tag string, uses []string, include []string, rest []string) {
+// extractMetadata parses tag:, uses:, include:, and pick: lines from the top of phase body lines.
+// Returns tag, uses, include, pick, and remaining content lines with metadata stripped.
+func extractMetadata(lines []string) (tag string, uses []string, include []string, pick string, rest []string) {
 	i := 0
 	for i < len(lines) {
 		trimmed := strings.TrimSpace(lines[i])
@@ -187,6 +203,19 @@ func extractMetadata(lines []string) (tag string, uses []string, include []strin
 				if f != "" {
 					include = append(include, f)
 				}
+			}
+			i++
+			continue
+		}
+		if strings.HasPrefix(lower, "pick:") {
+			val := strings.TrimSpace(strings.ToLower(trimmed[5:]))
+			switch val {
+			case "true", "yes", "1":
+				pick = "true"
+			case "last":
+				pick = "last"
+			default:
+				pick = val
 			}
 			i++
 			continue

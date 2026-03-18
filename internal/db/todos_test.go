@@ -135,7 +135,7 @@ func TestTodoCRUD(t *testing.T) {
 		}
 	})
 
-	t.Run("delete todo", func(t *testing.T) {
+	t.Run("delete todo (soft delete)", func(t *testing.T) {
 		db := openTestDB(t)
 		todo := &Todo{
 			ID:      "del12345",
@@ -148,12 +148,35 @@ func TestTodoCRUD(t *testing.T) {
 		if err := db.DeleteTodo(todo.ID); err != nil {
 			t.Fatalf("DeleteTodo() error = %v", err)
 		}
+
+		// GetTodo should still return the todo
 		got, err := db.GetTodo(todo.ID)
 		if err != nil {
 			t.Fatalf("GetTodo() error = %v", err)
 		}
-		if got != nil {
-			t.Errorf("GetTodo() after delete = %v, want nil", got)
+		if got == nil {
+			t.Fatal("GetTodo() returned nil after soft delete, want non-nil")
+		}
+		if got.DeletedAt == nil {
+			t.Error("DeletedAt is nil after soft delete, want non-nil")
+		}
+
+		// ListTodos("") should exclude deleted
+		all, err := db.ListTodos("")
+		if err != nil {
+			t.Fatalf("ListTodos() error = %v", err)
+		}
+		if len(all) != 0 {
+			t.Errorf("ListTodos('') after delete = %d, want 0", len(all))
+		}
+
+		// ListTodos("deleted") should include it
+		deleted, err := db.ListTodos(TodoStatusDeleted)
+		if err != nil {
+			t.Fatalf("ListTodos(deleted) error = %v", err)
+		}
+		if len(deleted) != 1 {
+			t.Errorf("ListTodos('deleted') = %d, want 1", len(deleted))
 		}
 	})
 }
@@ -222,6 +245,40 @@ func TestIdempotencyKey(t *testing.T) {
 		}
 		if len(all) != 2 {
 			t.Errorf("len(all) = %d, want 2", len(all))
+		}
+	})
+
+	t.Run("soft-deleted todo still blocks re-ingestion by idempotency key", func(t *testing.T) {
+		db := openTestDB(t)
+		key := "reuse-key"
+		t1 := &Todo{ID: "sdel0001", Status: TodoStatusTodo, Summary: "Original", IdempotencyKey: &key}
+		if err := db.CreateTodo(t1); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+
+		// Soft-delete the todo
+		if err := db.DeleteTodo(t1.ID); err != nil {
+			t.Fatalf("DeleteTodo() error = %v", err)
+		}
+
+		// Try to re-ingest with the same key
+		t2 := &Todo{ID: "sdel0002", Status: TodoStatusTodo, Summary: "Duplicate", IdempotencyKey: &key}
+		if err := db.CreateTodo(t2); err != nil {
+			t.Fatalf("CreateTodo() second call error = %v", err)
+		}
+
+		// Should return the original ID (blocked by idempotency)
+		if t2.ID != t1.ID {
+			t.Errorf("re-ingested ID = %q, want original %q (should be blocked)", t2.ID, t1.ID)
+		}
+
+		// Should still have only 1 todo in DB (the soft-deleted one)
+		all, err := db.ListTodos("")
+		if err != nil {
+			t.Fatalf("ListTodos() error = %v", err)
+		}
+		if len(all) != 0 {
+			t.Errorf("ListTodos('') = %d, want 0 (deleted todo should be hidden)", len(all))
 		}
 	})
 }

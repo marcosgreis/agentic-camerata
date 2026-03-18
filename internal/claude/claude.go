@@ -21,7 +21,7 @@ import (
 	"github.com/agentic-camerata/cmt/internal/tmux"
 )
 
-var capturedFileRe = regexp.MustCompile(`(thoughts/shared/\S+\.md)`)
+var defaultCapturedFileRe = regexp.MustCompile(`(thoughts/shared/\S+\.md)`)
 
 const (
 	// idleThreshold is how long without output before transitioning back to waiting
@@ -69,8 +69,9 @@ type RunOptions struct {
 	ResumeSessionID string // If non-empty, pass --resume to claude. "*" means no specific ID (interactive picker)
 	SkipTracking    bool   // If true, skip DB session creation and activity monitoring
 	AutoTerminate   bool   // If true, send Ctrl+D when session goes idle after working
-	CapturedFiles   *[]string // If non-nil, collect thoughts/shared/*.md paths from output
-	ParentID        string    // Parent session ID (for play command phases)
+	CapturedFiles   *[]string      // If non-nil, collect thoughts/shared/*.md paths from output
+	CapturePattern  *regexp.Regexp // If non-nil, override default file capture regex
+	ParentID        string         // Parent session ID (for play command phases)
 }
 
 // activityMonitor tracks PTY output to detect working/waiting states
@@ -254,12 +255,16 @@ func (r *Runner) buildCommand(opts RunOptions) *exec.Cmd {
 		}
 	}
 
-	// Add task as positional argument (prompt) if provided
-	if opts.TaskDescription != "" {
-		task := opts.TaskDescription
-		if prefix := GetPromptPrefix(opts.Command, opts.CommentTag); prefix != "" {
+	// Add task as positional argument (prompt) if provided or if a prefix exists
+	task := opts.TaskDescription
+	if prefix := GetPromptPrefix(opts.Command, opts.CommentTag); prefix != "" {
+		if task != "" {
 			task = prefix + " " + task
+		} else {
+			task = prefix
 		}
+	}
+	if task != "" {
 		args = append(args, task)
 	}
 
@@ -426,7 +431,11 @@ func (r *Runner) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sess
 
 				// Capture file paths from output
 				if opts.CapturedFiles != nil {
-					matches := capturedFileRe.FindAllString(string(buf[:n]), -1)
+					re := defaultCapturedFileRe
+				if opts.CapturePattern != nil {
+					re = opts.CapturePattern
+				}
+				matches := re.FindAllString(string(buf[:n]), -1)
 					for _, m := range matches {
 						if !capturedSeen[m] {
 							capturedSeen[m] = true

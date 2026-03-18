@@ -5,15 +5,25 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/agentic-camerata/cmt/internal/claude"
 	"github.com/agentic-camerata/cmt/internal/db"
+	"github.com/agentic-camerata/cmt/internal/plans"
 	"github.com/agentic-camerata/cmt/internal/playbook"
 	"github.com/agentic-camerata/cmt/internal/tmux"
 )
+
+// phaseCapturePatterns maps phase types to their file capture regex.
+// Only files matching the pattern are captured for that phase type.
+var phaseCapturePatterns = map[string]*regexp.Regexp{
+	"research": regexp.MustCompile(`(thoughts/shared/research/\S+\.md)`),
+	"plan":     regexp.MustCompile(`(thoughts/shared/plans/\S+\.md)`),
+	"review":   regexp.MustCompile(`(thoughts/shared/reviews/\S+\.md)`),
+}
 
 // PlayCmd runs a multi-phase playbook workflow
 type PlayCmd struct {
@@ -149,6 +159,23 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 		// Build task description
 		task := phase.Content
 
+		// Handle pick: select plan file for implement phases
+		switch phase.Pick {
+		case "true":
+			picked, err := plans.SelectPlanFile()
+			if err != nil {
+				return fmt.Errorf("phase %d (implement pick): %w", i+1, err)
+			}
+			task = picked
+		case "last":
+			picked, err := plans.LatestPlanFile()
+			if err != nil {
+				return fmt.Errorf("phase %d (implement pick:last): %w", i+1, err)
+			}
+			fmt.Printf("--- Selected latest plan: %s\n", picked)
+			task = picked
+		}
+
 		// Determine which files to pass based on phase type
 		var filesToPass []string
 		if len(phase.Uses) > 0 {
@@ -168,8 +195,8 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 					return fmt.Errorf("implement phase references tags with no captured files")
 				}
 			}
-		} else {
-			// Default behavior (unchanged)
+		} else if phase.Pick == "" {
+			// Default behavior (skip if pick already resolved the task)
 			switch phase.Type {
 			case "plan":
 				filesToPass = researchFiles
@@ -200,6 +227,7 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 			AutoTerminate:   i < total-1,
 			AutonomousMode:  cli.Autonomous,
 			CapturedFiles:   &phaseCaptured,
+			CapturePattern:  phaseCapturePatterns[phase.Type],
 			ParentID:        sessionID,
 		})
 		if err != nil {

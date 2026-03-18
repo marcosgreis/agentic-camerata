@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS todos (
     channel TEXT,
     sender TEXT,
     idempotency_key TEXT UNIQUE,
-    full_message TEXT
+    full_message TEXT,
+    deleted_at DATETIME
 );
 
 CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status);
