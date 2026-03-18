@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/agentic-camerata/cmt/internal/claude"
+	"github.com/agentic-camerata/cmt/internal/agent"
 	"github.com/agentic-camerata/cmt/internal/db"
 	"github.com/agentic-camerata/cmt/internal/plans"
 	"github.com/agentic-camerata/cmt/internal/playbook"
@@ -18,7 +18,6 @@ import (
 )
 
 // phaseCapturePatterns maps phase types to their file capture regex.
-// Only files matching the pattern are captured for that phase type.
 var phaseCapturePatterns = map[string]*regexp.Regexp{
 	"research": regexp.MustCompile(`(thoughts/shared/research/\S+\.md)`),
 	"plan":     regexp.MustCompile(`(thoughts/shared/plans/\S+\.md)`),
@@ -32,27 +31,16 @@ type PlayCmd struct {
 
 // phaseMapping maps playbook phase types to command/workflow types
 var phaseMapping = map[string]struct {
-	Command  claude.CommandType
+	Command  agent.CommandType
 	Workflow db.WorkflowType
 }{
-	"research":     {claude.CommandResearch, db.WorkflowResearch},
-	"plan":         {claude.CommandPlan, db.WorkflowPlan},
-	"implement":    {claude.CommandImplement, db.WorkflowImplement},
-	"new":          {claude.CommandNew, db.WorkflowGeneral},
-	"fix":          {claude.CommandFixTest, db.WorkflowFix},
-	"look-and-fix": {claude.CommandLookAndFix, db.WorkflowFix},
-	"review":       {claude.CommandReview, db.WorkflowReview},
-}
-
-// phaseModels maps phase types to their default model.
-var phaseModels = map[string]string{
-	"research":     "opus",
-	"plan":         "opus",
-	"implement":    "sonnet",
-	"new":          "opus",
-	"fix":          "opus",
-	"look-and-fix": "opus",
-	"review":       "opus",
+	"research":     {agent.CommandResearch, db.WorkflowResearch},
+	"plan":         {agent.CommandPlan, db.WorkflowPlan},
+	"implement":    {agent.CommandImplement, db.WorkflowImplement},
+	"new":          {agent.CommandNew, db.WorkflowGeneral},
+	"fix":          {agent.CommandFixTest, db.WorkflowFix},
+	"look-and-fix": {agent.CommandLookAndFix, db.WorkflowFix},
+	"review":       {agent.CommandReview, db.WorkflowReview},
 }
 
 // Run executes the play command
@@ -63,7 +51,7 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 	}
 
 	database := cli.Database()
-	runner, err := claude.NewRunner(database)
+	ag, err := newAgent(cli.Agent, database)
 	if err != nil {
 		return err
 	}
@@ -116,10 +104,9 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 		}
 	}()
 
-	// Scoped file tracking: each phase type only sees relevant files
-	var researchFiles []string              // files accumulated across all research phases (default behavior)
-	var planFile string                     // plan file from the most recent plan phase (default behavior)
-	taggedFiles := make(map[string][]string) // tag → captured files (for explicit references)
+	var researchFiles []string
+	var planFile string
+	taggedFiles := make(map[string][]string)
 	total := len(pb.Phases)
 
 	for i := 0; i < len(pb.Phases); i++ {
@@ -131,20 +118,17 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 			break
 		}
 
-		// Handle nested play phases by inlining the referenced playbook's phases
 		if phase.Type == "play" {
 			fmt.Printf("\n=== Phase %d/%d: play %s ===\n", i+1, total, phase.Content)
 			nestedPB, err := playbook.Parse(phase.Content)
 			if err != nil {
 				return fmt.Errorf("phase %d (play): %w", i+1, err)
 			}
-			// Replace the play phase with the nested playbook's phases
 			expanded := make([]playbook.Phase, 0, len(pb.Phases)-1+len(nestedPB.Phases))
 			expanded = append(expanded, pb.Phases[:i]...)
 			expanded = append(expanded, nestedPB.Phases...)
 			expanded = append(expanded, pb.Phases[i+1:]...)
 			pb.Phases = expanded
-			// Re-process current index (now points to first nested phase)
 			i--
 			continue
 		}
@@ -156,10 +140,8 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 
 		fmt.Printf("\n=== Phase %d/%d: %s ===\n", i+1, total, phase.Type)
 
-		// Build task description
 		task := phase.Content
 
-		// Handle pick: select plan file for implement phases
 		switch phase.Pick {
 		case "true":
 			picked, err := plans.SelectPlanFile()
@@ -176,14 +158,11 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 			task = picked
 		}
 
-		// Determine which files to pass based on phase type
 		var filesToPass []string
 		if len(phase.Uses) > 0 {
-			// Explicit references: only pass files from referenced tags
 			for _, ref := range phase.Uses {
 				filesToPass = append(filesToPass, taggedFiles[ref]...)
 			}
-			// For implement with no content, use last referenced file as task
 			if phase.Type == "implement" && task == "" {
 				if pf := lastPlanFile(filesToPass); pf != "" {
 					task = pf
@@ -196,7 +175,6 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 				}
 			}
 		} else if phase.Pick == "" {
-			// Default behavior (skip if pick already resolved the task)
 			switch phase.Type {
 			case "plan":
 				filesToPass = researchFiles
@@ -212,18 +190,17 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 			}
 		}
 
-		// Prepend include files and scoped files to task
 		allFiles := append(phase.Include, filesToPass...)
 		if len(allFiles) > 0 && task != "" {
 			task = PrependFilesToTask(allFiles, task)
 		}
 
 		var phaseCaptured []string
-		err := runner.Run(context.Background(), claude.RunOptions{
+		err := ag.Run(context.Background(), agent.RunOptions{
 			Command:         mapping.Command,
 			WorkflowType:    mapping.Workflow,
 			TaskDescription: task,
-			Model:           cli.ResolveModel(phaseModels[phase.Type]),
+			Model:           cli.Model,
 			AutoTerminate:   i < total-1,
 			AutonomousMode:  cli.Autonomous,
 			CapturedFiles:   &phaseCaptured,
@@ -234,7 +211,6 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 			return fmt.Errorf("phase %d (%s): %w", i+1, phase.Type, err)
 		}
 
-		// Route captured files to the appropriate scope
 		validated := existingFiles(phaseCaptured)
 		switch phase.Type {
 		case "research":
@@ -245,7 +221,6 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 			}
 		}
 
-		// Also store under tag if present
 		if phase.Tag != "" {
 			taggedFiles[phase.Tag] = append(taggedFiles[phase.Tag], validated...)
 		}

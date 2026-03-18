@@ -3,11 +3,11 @@ package cli
 import (
 	"context"
 
-	"github.com/agentic-camerata/cmt/internal/claude"
+	"github.com/agentic-camerata/cmt/internal/agent"
 	"github.com/agentic-camerata/cmt/internal/db"
 )
 
-// ResearchCmd starts a research-focused Claude session
+// ResearchCmd starts a research-focused agent session
 type ResearchCmd struct {
 	FileFlags
 	Topic string `arg:"" help:"Topic or area to research"`
@@ -15,25 +15,23 @@ type ResearchCmd struct {
 
 // Run executes the research command
 func (c *ResearchCmd) Run(cli *CLI) error {
-	// Resolve file flags
 	files, err := c.FileFlags.ResolveFiles()
 	if err != nil {
 		return err
 	}
 
-	// Prepend files to topic
 	topic := PrependFilesToTask(files, c.Topic)
 
-	runner, err := claude.NewRunner(cli.Database())
+	ag, err := newAgent(cli.Agent, cli.Database())
 	if err != nil {
 		return err
 	}
 
-	return runner.Run(context.Background(), claude.RunOptions{
-		Command:         claude.CommandResearch,
+	return ag.Run(context.Background(), agent.RunOptions{
+		Command:         agent.CommandResearch,
 		WorkflowType:    db.WorkflowResearch,
 		TaskDescription: topic,
-		Model:           cli.ResolveModel("opus"),
+		Model:           cli.Model,
 		AutonomousMode:  cli.Autonomous,
 	})
 }
