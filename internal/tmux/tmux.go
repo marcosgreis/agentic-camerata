@@ -141,18 +141,9 @@ func KillPane(paneID string) error {
 	return exec.Command("tmux", "kill-pane", "-t", paneID).Run()
 }
 
-// IsPaneAlive returns true if the given pane ID still exists in any tmux session.
+// IsPaneAlive returns true if the given pane ID still exists.
 func IsPaneAlive(paneID string) bool {
-	out, err := exec.Command("tmux", "list-panes", "-a", "-F", "#{pane_id}").Output()
-	if err != nil {
-		return false
-	}
-	for _, line := range strings.Split(string(out), "\n") {
-		if strings.TrimSpace(line) == paneID {
-			return true
-		}
-	}
-	return false
+	return exec.Command("tmux", "display-message", "-t", paneID, "-p", "#{pane_id}").Run() == nil
 }
 
 // GetPaneWorkingDirectory returns the working directory of a specific pane
