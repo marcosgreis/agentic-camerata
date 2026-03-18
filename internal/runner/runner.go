@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -404,4 +405,122 @@ func isKilledError(err error) bool {
 		}
 	}
 	return false
+}
+
+// shellescape wraps s in single quotes, escaping any embedded single quotes.
+func shellescape(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// PaneSession represents an agent session running in a background tmux pane.
+type PaneSession struct {
+	paneID    string
+	sessionID string
+	logFile   string
+	db        *db.DB
+}
+
+// ExecuteInPane starts a pre-built command in a new background tmux pane (non-blocking).
+// Output is piped through tee so it appears in the pane and is saved to the session log.
+// The pane does not steal focus. Call PaneSession.Wait to wait for completion.
+func (b *Base) ExecuteInPane(ctx context.Context, cmd *exec.Cmd, opts agent.RunOptions) (*PaneSession, error) {
+	if err := tmux.RequireTmux(); err != nil {
+		return nil, fmt.Errorf("cmt requires tmux: %w", err)
+	}
+
+	workDir := opts.WorkingDir
+	if workDir == "" {
+		var err error
+		workDir, err = os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("get working directory: %w", err)
+		}
+	}
+
+	sessionID := uuid.New().String()[:8]
+	logFile := filepath.Join(b.outputDir, sessionID+".log")
+	prefix := os.Getenv("CMT_PREFIX")
+
+	loc, err := tmux.CurrentLocation()
+	if err != nil {
+		return nil, fmt.Errorf("get tmux location: %w", err)
+	}
+
+	// Build shell command: cd to workdir, run agent CLI, tee output to log file
+	parts := make([]string, len(cmd.Args))
+	for i, arg := range cmd.Args {
+		parts[i] = shellescape(arg)
+	}
+	shellCmd := fmt.Sprintf("cd %s && %s 2>&1 | tee %s",
+		shellescape(workDir),
+		strings.Join(parts, " "),
+		shellescape(logFile))
+
+	paneID, err := tmux.NewBackgroundPane(shellCmd)
+	if err != nil {
+		return nil, fmt.Errorf("create background pane: %w", err)
+	}
+
+	session := &db.Session{
+		ID:               sessionID,
+		WorkflowType:     opts.WorkflowType,
+		Status:           db.StatusWorking,
+		WorkingDirectory: workDir,
+		TaskDescription:  opts.TaskDescription,
+		Prefix:           prefix,
+		TmuxSession:      loc.Session,
+		TmuxWindow:       loc.Window,
+		TmuxPane:         loc.Pane,
+		OutputFile:       logFile,
+		ParentID:         opts.ParentID,
+	}
+	if err := b.db.CreateSession(session); err != nil {
+		tmux.KillPane(paneID) //nolint:errcheck
+		return nil, fmt.Errorf("create session: %w", err)
+	}
+
+	return &PaneSession{
+		paneID:    paneID,
+		sessionID: sessionID,
+		logFile:   logFile,
+		db:        b.db,
+	}, nil
+}
+
+// Wait polls until the background pane exits, collects captured files, and cleans up.
+func (ps *PaneSession) Wait(ctx context.Context, capturePattern *regexp.Regexp) ([]string, error) {
+	for {
+		select {
+		case <-ctx.Done():
+			tmux.KillPane(ps.paneID) //nolint:errcheck
+			ps.db.UpdateSessionStatus(ps.sessionID, db.StatusAbandoned)
+			return nil, ctx.Err()
+		default:
+		}
+		if !tmux.IsPaneAlive(ps.paneID) {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	tmux.KillPane(ps.paneID) //nolint:errcheck
+
+	// Parse log file for captured file paths
+	var captured []string
+	if data, err := os.ReadFile(ps.logFile); err == nil {
+		re := defaultCapturedFileRe
+		if capturePattern != nil {
+			re = capturePattern
+		}
+		seen := map[string]bool{}
+		for _, m := range re.FindAllString(string(data), -1) {
+			if !seen[m] {
+				seen[m] = true
+				captured = append(captured, m)
+			}
+		}
+	}
+
+	ps.db.UpdateSessionStatus(ps.sessionID, db.StatusCompleted)
+	return captured, nil
 }

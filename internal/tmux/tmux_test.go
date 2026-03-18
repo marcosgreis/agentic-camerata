@@ -180,6 +180,69 @@ func TestListSessions(t *testing.T) {
 	})
 }
 
+func TestNewBackgroundPane(t *testing.T) {
+	t.Run("returns error when not in tmux", func(t *testing.T) {
+		original := os.Getenv("TMUX")
+		defer os.Setenv("TMUX", original)
+		os.Unsetenv("TMUX")
+
+		_, err := NewBackgroundPane("echo hello")
+		if err == nil {
+			t.Error("NewBackgroundPane() = nil error, want error when not in tmux")
+		}
+	})
+
+	// Integration test - only run if actually in tmux
+	t.Run("creates and kills a background pane", func(t *testing.T) {
+		if os.Getenv("TMUX") == "" {
+			t.Skip("skipping: not running in tmux")
+		}
+
+		paneID, err := NewBackgroundPane("sleep 10")
+		if err != nil {
+			t.Fatalf("NewBackgroundPane() error = %v", err)
+		}
+		if paneID == "" {
+			t.Fatal("NewBackgroundPane() returned empty pane ID")
+		}
+		t.Logf("Created pane: %s", paneID)
+
+		if !IsPaneAlive(paneID) {
+			t.Error("IsPaneAlive() = false, want true for newly created pane")
+		}
+
+		if err := KillPane(paneID); err != nil {
+			t.Errorf("KillPane() error = %v", err)
+		}
+
+		if IsPaneAlive(paneID) {
+			t.Error("IsPaneAlive() = true, want false after killing pane")
+		}
+	})
+}
+
+func TestIsPaneAlive(t *testing.T) {
+	t.Run("returns false for nonexistent pane", func(t *testing.T) {
+		if IsPaneAlive("%999999") {
+			t.Error("IsPaneAlive() = true for nonexistent pane ID, want false")
+		}
+	})
+}
+
+func TestKillPane(t *testing.T) {
+	t.Run("returns error for nonexistent pane when in tmux", func(t *testing.T) {
+		if os.Getenv("TMUX") == "" {
+			t.Skip("skipping: not running in tmux")
+		}
+
+		// Killing a nonexistent pane should produce an error
+		err := KillPane("%999999")
+		if err == nil {
+			t.Error("KillPane() = nil, want error for nonexistent pane")
+		}
+	})
+}
+
 func TestGetPaneWorkingDirectory(t *testing.T) {
 	// Integration test - only run if actually in tmux
 	t.Run("returns working directory when in tmux", func(t *testing.T) {

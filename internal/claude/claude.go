@@ -38,6 +38,14 @@ func (r *Runner) Run(ctx context.Context, opts agent.RunOptions) error {
 	return r.base.Execute(ctx, cmd, opts)
 }
 
+// StartInPane starts a Claude session in a new background tmux pane (non-blocking).
+// Forces print mode so the process terminates after completing the task.
+func (r *Runner) StartInPane(ctx context.Context, opts agent.RunOptions) (*runner.PaneSession, error) {
+	opts.PrintMode = true
+	cmd := r.buildCommand(opts)
+	return r.base.ExecuteInPane(ctx, cmd, opts)
+}
+
 // defaultModels maps command types to the default model for Claude.
 var defaultModels = map[agent.CommandType]string{
 	agent.CommandNew:        "opus",

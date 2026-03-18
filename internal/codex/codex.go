@@ -33,6 +33,14 @@ func (r *Runner) Run(ctx context.Context, opts agent.RunOptions) error {
 	return r.base.Execute(ctx, cmd, opts)
 }
 
+// StartInPane starts a Codex session in a new background tmux pane (non-blocking).
+// Forces print mode so the process terminates after completing the task.
+func (r *Runner) StartInPane(ctx context.Context, opts agent.RunOptions) (*runner.PaneSession, error) {
+	opts.PrintMode = true
+	cmd := r.buildCommand(opts)
+	return r.base.ExecuteInPane(ctx, cmd, opts)
+}
+
 // DefaultModel returns the Codex-specific default model for a command type.
 // Returns "" to let the codex CLI use its own built-in default.
 func (r *Runner) DefaultModel(cmd agent.CommandType) string {

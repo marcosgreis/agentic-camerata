@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 
@@ -14,8 +15,14 @@ import (
 	"github.com/agentic-camerata/cmt/internal/db"
 	"github.com/agentic-camerata/cmt/internal/plans"
 	"github.com/agentic-camerata/cmt/internal/playbook"
+	"github.com/agentic-camerata/cmt/internal/runner"
 	"github.com/agentic-camerata/cmt/internal/tmux"
 )
+
+// paneStarter is an optional interface for agents that support background pane execution.
+type paneStarter interface {
+	StartInPane(ctx context.Context, opts agent.RunOptions) (*runner.PaneSession, error)
+}
 
 // phaseCapturePatterns maps phase types to their file capture regex.
 var phaseCapturePatterns = map[string]*regexp.Regexp{
@@ -133,6 +140,36 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 			continue
 		}
 
+		// Check for a group of consecutive independent research phases to run in parallel.
+		if phase.Type == "research" {
+			j := i + 1
+			for j < len(pb.Phases) && pb.Phases[j].Type == "research" {
+				j++
+			}
+			group := pb.Phases[i:j]
+			if len(group) > 1 && isParallelizable(group) {
+				if _, ok := ag.(paneStarter); ok {
+					fmt.Printf("\n=== Phases %d-%d/%d: %d parallel research phases ===\n", i+1, j, total, len(group))
+					capturedByPhase, err := runParallelResearch(context.Background(), ag, group, cli, taggedFiles, sessionID)
+					if err != nil {
+						return fmt.Errorf("parallel research phases %d-%d: %w", i+1, j, err)
+					}
+					for k, p := range group {
+						validated := existingFiles(capturedByPhase[k])
+						researchFiles = append(researchFiles, validated...)
+						if p.Tag != "" {
+							taggedFiles[p.Tag] = append(taggedFiles[p.Tag], validated...)
+						}
+						if len(capturedByPhase[k]) > 0 {
+							fmt.Printf("--- Phase %d captured: %s\n", i+k+1, strings.Join(capturedByPhase[k], ", "))
+						}
+					}
+					i = j - 1 // loop will increment to j
+					continue
+				}
+			}
+		}
+
 		mapping, ok := phaseMapping[phase.Type]
 		if !ok {
 			return fmt.Errorf("unknown phase type: %s", phase.Type)
@@ -232,6 +269,87 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 
 	fmt.Printf("\n=== Playbook complete (%d phases) ===\n", total)
 	return nil
+}
+
+// isParallelizable returns true if the given research phases can all run concurrently.
+// Phases are parallelizable when no phase uses a tag produced by another phase in the group.
+func isParallelizable(phases []playbook.Phase) bool {
+	if len(phases) <= 1 {
+		return false
+	}
+	groupTags := make(map[string]bool)
+	for _, p := range phases {
+		if p.Tag != "" {
+			groupTags[p.Tag] = true
+		}
+	}
+	for _, p := range phases {
+		for _, u := range p.Uses {
+			if groupTags[u] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// runParallelResearch runs multiple research phases concurrently, each in its own tmux pane.
+// ag must implement paneStarter. Returns a slice of captured file paths (one entry per phase, in order).
+func runParallelResearch(ctx context.Context, ag agent.Agent, phases []playbook.Phase, cli *CLI, taggedFiles map[string][]string, parentID string) ([][]string, error) {
+	ps := ag.(paneStarter) // caller ensures ag implements paneStarter
+
+	type result struct {
+		files []string
+		err   error
+	}
+
+	results := make([]result, len(phases))
+	captureRe := phaseCapturePatterns["research"]
+
+	var wg sync.WaitGroup
+	for idx, phase := range phases {
+		wg.Add(1)
+		go func(idx int, phase playbook.Phase) {
+			defer wg.Done()
+
+			task := phase.Content
+			var filesToPass []string
+			for _, ref := range phase.Uses {
+				filesToPass = append(filesToPass, taggedFiles[ref]...)
+			}
+			allFiles := append(phase.Include, filesToPass...)
+			if len(allFiles) > 0 && task != "" {
+				task = PrependFilesToTask(allFiles, task)
+			}
+
+			pane, err := ps.StartInPane(ctx, agent.RunOptions{
+				Command:         agent.CommandResearch,
+				WorkflowType:    db.WorkflowResearch,
+				TaskDescription: task,
+				Model:           cli.Model,
+				AutonomousMode:  cli.Autonomous,
+				ParentID:        parentID,
+			})
+			if err != nil {
+				results[idx].err = err
+				return
+			}
+
+			files, err := pane.Wait(ctx, captureRe)
+			results[idx].files = files
+			results[idx].err = err
+		}(idx, phase)
+	}
+	wg.Wait()
+
+	capturedAll := make([][]string, len(phases))
+	for i, r := range results {
+		if r.err != nil {
+			return nil, fmt.Errorf("research phase %d: %w", i+1, r.err)
+		}
+		capturedAll[i] = r.files
+	}
+	return capturedAll, nil
 }
 
 // lastPlanFile returns the last captured file matching thoughts/shared/plans/*.md

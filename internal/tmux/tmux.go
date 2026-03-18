@@ -122,6 +122,39 @@ func ListSessions() ([]string, error) {
 	return sessions, nil
 }
 
+// NewBackgroundPane creates a new tmux pane running the given shell command.
+// The pane does not steal focus from the current pane.
+// Returns the pane ID (e.g., "%42").
+func NewBackgroundPane(shellCmd string) (string, error) {
+	if err := RequireTmux(); err != nil {
+		return "", err
+	}
+	out, err := exec.Command("tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", shellCmd).Output()
+	if err != nil {
+		return "", fmt.Errorf("create background pane: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// KillPane kills a tmux pane by its pane ID (e.g., "%42").
+func KillPane(paneID string) error {
+	return exec.Command("tmux", "kill-pane", "-t", paneID).Run()
+}
+
+// IsPaneAlive returns true if the given pane ID still exists in any tmux session.
+func IsPaneAlive(paneID string) bool {
+	out, err := exec.Command("tmux", "list-panes", "-a", "-F", "#{pane_id}").Output()
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.TrimSpace(line) == paneID {
+			return true
+		}
+	}
+	return false
+}
+
 // GetPaneWorkingDirectory returns the working directory of a specific pane
 func GetPaneWorkingDirectory(loc Location) (string, error) {
 	target := fmt.Sprintf("%s:%d.%d", loc.Session, loc.Window, loc.Pane)
