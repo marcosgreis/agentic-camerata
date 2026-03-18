@@ -7,71 +7,72 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentic-camerata/cmt/internal/agent"
 	"github.com/agentic-camerata/cmt/internal/db"
 )
 
 func TestGetPromptPrefix(t *testing.T) {
 	tests := []struct {
 		name       string
-		command    CommandType
+		command    agent.CommandType
 		commentTag string
 		wantPrefix string
 	}{
 		{
 			name:       "new command has no prefix",
-			command:    CommandNew,
+			command:    agent.CommandNew,
 			wantPrefix: "",
 		},
 		{
 			name:       "research command has skill prefix",
-			command:    CommandResearch,
+			command:    agent.CommandResearch,
 			wantPrefix: "/research_codebase",
 		},
 		{
 			name:       "plan command has skill prefix",
-			command:    CommandPlan,
+			command:    agent.CommandPlan,
 			wantPrefix: "/create_plan",
 		},
 		{
 			name:       "implement command has skill prefix",
-			command:    CommandImplement,
+			command:    agent.CommandImplement,
 			wantPrefix: "/implement_plan implement all phases ignoring any manual verification steps",
 		},
 		{
 			name:       "fix-test command has instruction prefix",
-			command:    CommandFixTest,
+			command:    agent.CommandFixTest,
 			wantPrefix: "Analyze and fix the failing test at:",
 		},
 		{
 			name:       "look-and-fix command has instruction prefix",
-			command:    CommandLookAndFix,
+			command:    agent.CommandLookAndFix,
 			wantPrefix: "Take a look at this repo and search for comments tagged with CMT and propose how to solve them. If a class name or filename is provided as a parameter, focus the search on that specific file or class.",
 		},
 		{
 			name:       "quick command has no prefix",
-			command:    CommandQuick,
+			command:    agent.CommandQuick,
 			wantPrefix: "",
 		},
 		{
 			name:       "unknown command has no prefix",
-			command:    CommandType("unknown"),
+			command:    agent.CommandType("unknown"),
 			wantPrefix: "",
 		},
 		{
 			name:       "look-and-fix with custom tag",
-			command:    CommandLookAndFix,
+			command:    agent.CommandLookAndFix,
 			commentTag: "TODO",
 			wantPrefix: "Take a look at this repo and search for comments tagged with TODO and propose how to solve them. If a class name or filename is provided as a parameter, focus the search on that specific file or class.",
 		},
 		{
 			name:       "look-and-fix with empty tag defaults to CMT",
-			command:    CommandLookAndFix,
+			command:    agent.CommandLookAndFix,
 			commentTag: "",
 			wantPrefix: "Take a look at this repo and search for comments tagged with CMT and propose how to solve them. If a class name or filename is provided as a parameter, focus the search on that specific file or class.",
 		},
 		{
 			name:       "non-look-and-fix ignores commentTag",
-			command:    CommandResearch,
+			command:    agent.CommandResearch,
 			commentTag: "SOMETHING",
 			wantPrefix: "/research_codebase",
 		},
@@ -111,10 +112,6 @@ func TestNewRunner(t *testing.T) {
 		t.Fatal("NewRunner() returned nil")
 	}
 
-	if runner.db != database {
-		t.Error("Runner database not set correctly")
-	}
-
 	// Check output directory was created
 	home, _ := os.UserHomeDir()
 	outputDir := filepath.Join(home, ".config", "cmt", "output")
@@ -137,22 +134,22 @@ func TestBuildCommand(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		opts        RunOptions
+		opts        agent.RunOptions
 		wantArgs    []string
 		notWantArgs []string
 	}{
 		{
 			name: "general workflow no prompt",
-			opts: RunOptions{
-				Command:      CommandNew,
+			opts: agent.RunOptions{
+				Command:      agent.CommandNew,
 				WorkflowType: db.WorkflowGeneral,
 			},
 			notWantArgs: []string{"--system-prompt"},
 		},
 		{
 			name: "research workflow",
-			opts: RunOptions{
-				Command:         CommandResearch,
+			opts: agent.RunOptions{
+				Command:         agent.CommandResearch,
 				WorkflowType:    db.WorkflowResearch,
 				TaskDescription: "test topic",
 			},
@@ -161,8 +158,8 @@ func TestBuildCommand(t *testing.T) {
 		},
 		{
 			name: "with task description",
-			opts: RunOptions{
-				Command:         CommandNew,
+			opts: agent.RunOptions{
+				Command:         agent.CommandNew,
 				WorkflowType:    db.WorkflowGeneral,
 				TaskDescription: "test task",
 			},
@@ -171,8 +168,8 @@ func TestBuildCommand(t *testing.T) {
 		},
 		{
 			name: "autonomous mode enabled",
-			opts: RunOptions{
-				Command:        CommandNew,
+			opts: agent.RunOptions{
+				Command:        agent.CommandNew,
 				WorkflowType:   db.WorkflowGeneral,
 				AutonomousMode: true,
 			},
@@ -180,8 +177,8 @@ func TestBuildCommand(t *testing.T) {
 		},
 		{
 			name: "autonomous mode with task",
-			opts: RunOptions{
-				Command:         CommandNew,
+			opts: agent.RunOptions{
+				Command:         agent.CommandNew,
 				WorkflowType:    db.WorkflowGeneral,
 				TaskDescription: "test task",
 				AutonomousMode:  true,
@@ -190,8 +187,8 @@ func TestBuildCommand(t *testing.T) {
 		},
 		{
 			name: "autonomous mode disabled by default",
-			opts: RunOptions{
-				Command:         CommandNew,
+			opts: agent.RunOptions{
+				Command:         agent.CommandNew,
 				WorkflowType:    db.WorkflowGeneral,
 				TaskDescription: "test task",
 			},
@@ -199,8 +196,8 @@ func TestBuildCommand(t *testing.T) {
 		},
 		{
 			name: "look-and-fix with custom comment tag",
-			opts: RunOptions{
-				Command:         CommandLookAndFix,
+			opts: agent.RunOptions{
+				Command:         agent.CommandLookAndFix,
 				WorkflowType:    db.WorkflowFix,
 				TaskDescription: "auth bug",
 				CommentTag:      "FIXME",
@@ -210,8 +207,8 @@ func TestBuildCommand(t *testing.T) {
 		},
 		{
 			name: "look-and-fix defaults to CMT tag",
-			opts: RunOptions{
-				Command:         CommandLookAndFix,
+			opts: agent.RunOptions{
+				Command:         agent.CommandLookAndFix,
 				WorkflowType:    db.WorkflowFix,
 				TaskDescription: "auth bug",
 			},
@@ -219,8 +216,8 @@ func TestBuildCommand(t *testing.T) {
 		},
 		{
 			name: "resume interactive picker",
-			opts: RunOptions{
-				Command:         CommandNew,
+			opts: agent.RunOptions{
+				Command:         agent.CommandNew,
 				WorkflowType:    db.WorkflowGeneral,
 				ResumeSessionID: "*",
 			},
@@ -229,8 +226,8 @@ func TestBuildCommand(t *testing.T) {
 		},
 		{
 			name: "resume specific session",
-			opts: RunOptions{
-				Command:         CommandNew,
+			opts: agent.RunOptions{
+				Command:         agent.CommandNew,
 				WorkflowType:    db.WorkflowGeneral,
 				ResumeSessionID: "abc123",
 			},
@@ -238,16 +235,16 @@ func TestBuildCommand(t *testing.T) {
 		},
 		{
 			name: "no resume by default",
-			opts: RunOptions{
-				Command:      CommandNew,
+			opts: agent.RunOptions{
+				Command:      agent.CommandNew,
 				WorkflowType: db.WorkflowGeneral,
 			},
 			notWantArgs: []string{"--resume"},
 		},
 		{
 			name: "resume with task description",
-			opts: RunOptions{
-				Command:         CommandNew,
+			opts: agent.RunOptions{
+				Command:         agent.CommandNew,
 				WorkflowType:    db.WorkflowGeneral,
 				TaskDescription: "fix the bug",
 				ResumeSessionID: "*",
@@ -294,7 +291,7 @@ func TestRunRequiresTmux(t *testing.T) {
 
 	runner, _ := NewRunner(database)
 
-	err = runner.Run(nil, RunOptions{
+	err = runner.Run(nil, agent.RunOptions{
 		WorkflowType: db.WorkflowGeneral,
 	})
 

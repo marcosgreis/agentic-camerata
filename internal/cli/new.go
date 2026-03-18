@@ -3,11 +3,11 @@ package cli
 import (
 	"context"
 
-	"github.com/agentic-camerata/cmt/internal/claude"
+	"github.com/agentic-camerata/cmt/internal/agent"
 	"github.com/agentic-camerata/cmt/internal/db"
 )
 
-// NewCmd starts a new Claude session
+// NewCmd starts a new general agent session
 type NewCmd struct {
 	FileFlags
 	Resume   bool   `short:"r" help:"Resume a previous Claude session (interactive picker)"`
@@ -17,21 +17,18 @@ type NewCmd struct {
 
 // Run executes the new command
 func (c *NewCmd) Run(cli *CLI) error {
-	// Resolve file flags
 	files, err := c.FileFlags.ResolveFiles()
 	if err != nil {
 		return err
 	}
 
-	// Prepend files to task
 	task := PrependFilesToTask(files, c.Task)
 
-	runner, err := claude.NewRunner(cli.Database())
+	ag, err := newAgent(cli.Agent, cli.Database())
 	if err != nil {
 		return err
 	}
 
-	// Determine resume session ID
 	var resumeID string
 	if c.ResumeID != "" {
 		resumeID = c.ResumeID
@@ -39,11 +36,11 @@ func (c *NewCmd) Run(cli *CLI) error {
 		resumeID = "*"
 	}
 
-	return runner.Run(context.Background(), claude.RunOptions{
-		Command:         claude.CommandNew,
+	return ag.Run(context.Background(), agent.RunOptions{
+		Command:         agent.CommandNew,
 		WorkflowType:    db.WorkflowGeneral,
 		TaskDescription: task,
-		Model:           cli.ResolveModel("opus"),
+		Model:           cli.Model,
 		AutonomousMode:  cli.Autonomous,
 		ResumeSessionID: resumeID,
 	})

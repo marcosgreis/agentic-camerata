@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"github.com/agentic-camerata/cmt/internal/claude"
+	"github.com/agentic-camerata/cmt/internal/agent"
 	"github.com/agentic-camerata/cmt/internal/db"
 )
 
@@ -15,25 +15,23 @@ type FixTestCmd struct {
 
 // Run executes the fix-test command
 func (c *FixTestCmd) Run(cli *CLI) error {
-	// Resolve file flags
 	files, err := c.FileFlags.ResolveFiles()
 	if err != nil {
 		return err
 	}
 
-	// Prepend files to test
 	test := PrependFilesToTask(files, c.Test)
 
-	runner, err := claude.NewRunner(cli.Database())
+	ag, err := newAgent(cli.Agent, cli.Database())
 	if err != nil {
 		return err
 	}
 
-	return runner.Run(context.Background(), claude.RunOptions{
-		Command:         claude.CommandFixTest,
+	return ag.Run(context.Background(), agent.RunOptions{
+		Command:         agent.CommandFixTest,
 		WorkflowType:    db.WorkflowFix,
 		TaskDescription: test,
-		Model:           cli.ResolveModel("opus"),
+		Model:           cli.Model,
 		AutonomousMode:  cli.Autonomous,
 	})
 }

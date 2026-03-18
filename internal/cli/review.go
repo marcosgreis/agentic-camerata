@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"github.com/agentic-camerata/cmt/internal/claude"
+	"github.com/agentic-camerata/cmt/internal/agent"
 	"github.com/agentic-camerata/cmt/internal/db"
 )
 
@@ -22,16 +22,16 @@ func (c *ReviewCmd) Run(cli *CLI) error {
 
 	focus := PrependFilesToTask(files, c.Focus)
 
-	runner, err := claude.NewRunner(cli.Database())
+	ag, err := newAgent(cli.Agent, cli.Database())
 	if err != nil {
 		return err
 	}
 
-	return runner.Run(context.Background(), claude.RunOptions{
-		Command:         claude.CommandReview,
+	return ag.Run(context.Background(), agent.RunOptions{
+		Command:         agent.CommandReview,
 		WorkflowType:    db.WorkflowReview,
 		TaskDescription: focus,
-		Model:           cli.ResolveModel("opus"),
+		Model:           cli.Model,
 		AutonomousMode:  cli.Autonomous,
 	})
 }
