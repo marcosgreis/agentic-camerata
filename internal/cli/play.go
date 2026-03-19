@@ -79,6 +79,23 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 	outputDir := filepath.Join(homeDir, ".config", "cmt", "output")
 	os.MkdirAll(outputDir, 0755) //nolint:errcheck
 
+	// Copy playbook to config dir for future reference
+	playbooksDir := os.Getenv("CMT_PLAYBOOKS_DIR")
+	if playbooksDir == "" {
+		playbooksDir = filepath.Join(homeDir, ".agentic-camerata", "playbooks")
+	}
+	os.MkdirAll(playbooksDir, 0755) //nolint:errcheck
+
+	savedName := sessionID + "-" + filepath.Base(playbookPath)
+	savedPath := filepath.Join(playbooksDir, savedName)
+	pbData, err := os.ReadFile(playbookPath)
+	if err != nil {
+		return fmt.Errorf("read playbook for copy: %w", err)
+	}
+	if err := os.WriteFile(savedPath, pbData, 0644); err != nil {
+		return fmt.Errorf("save playbook copy: %w", err)
+	}
+
 	session := &db.Session{
 		ID:               sessionID,
 		WorkflowType:     db.WorkflowPlay,
@@ -90,6 +107,7 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 		TmuxWindow:       loc.Window,
 		TmuxPane:         loc.Pane,
 		OutputFile:       filepath.Join(outputDir, sessionID+".log"),
+		PlaybookFile:     savedPath,
 		PID:              os.Getpid(),
 	}
 	if err := database.CreateSession(session); err != nil {

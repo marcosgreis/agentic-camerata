@@ -603,12 +603,32 @@ func (d *Dashboard) formatSessionInfo(session *db.Session) string {
 		content.WriteString("\n")
 		if parent, err := d.db.GetSession(session.ParentID); err == nil && parent != nil {
 			content.WriteString(fmt.Sprintf("Parent Status:     %s\n", parent.Status))
-			content.WriteString(fmt.Sprintf("Playbook:          %s\n", parent.TaskDescription))
+			if parent.PlaybookFile != "" {
+				content.WriteString(fmt.Sprintf("Playbook:          %s\n", parent.PlaybookFile))
+			} else {
+				content.WriteString(fmt.Sprintf("Playbook:          %s\n", parent.TaskDescription))
+			}
 			content.WriteString(fmt.Sprintf("Parent Created:    %s\n", parent.CreatedAt.Format(time.RFC3339)))
 			content.WriteString(fmt.Sprintf("Parent Tmux:       %s:%d.%d\n", parent.TmuxSession, parent.TmuxWindow, parent.TmuxPane))
 		} else {
 			content.WriteString("(Parent session not found)\n")
 		}
+	}
+
+	// Show saved playbook content for play sessions
+	if session.WorkflowType == db.WorkflowPlay && session.PlaybookFile != "" {
+		content.WriteString("\n")
+		content.WriteString(fmt.Sprintf("Playbook File:     %s\n", session.PlaybookFile))
+		content.WriteString("\n")
+		content.WriteString("─── Playbook Content ─────────────────────\n")
+		content.WriteString("\n")
+		data, err := os.ReadFile(session.PlaybookFile)
+		if err != nil {
+			content.WriteString(fmt.Sprintf("Error reading playbook: %v", err))
+		} else {
+			content.Write(data)
+		}
+		content.WriteString("\n")
 	}
 
 	content.WriteString("\n")
