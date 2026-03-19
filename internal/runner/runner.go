@@ -85,7 +85,7 @@ func (b *Base) Execute(ctx context.Context, cmd *exec.Cmd, opts agent.RunOptions
 
 	// Skip DB tracking for quick/ephemeral commands
 	if opts.SkipTracking {
-		return b.runWithPTY(ctx, cmd, nil, opts)
+		return b.runWithPTY(ctx, cmd, nil, opts, nil)
 	}
 
 	// Create session record
@@ -117,13 +117,20 @@ func (b *Base) Execute(ctx context.Context, cmd *exec.Cmd, opts agent.RunOptions
 	}
 
 	// Run with PTY capture
-	err = b.runWithPTY(ctx, cmd, session, opts)
+	var autoTerminated bool
+	err = b.runWithPTY(ctx, cmd, session, opts, &autoTerminated)
 
 	// When auto-terminate kills the process, cmd.Wait() returns a "signal: killed" error
 	// which is expected and should be treated as successful completion
 	if err != nil && !(opts.AutoTerminate && isKilledError(err)) {
 		b.db.UpdateSessionStatus(sessionID, db.StatusAbandoned)
 		return err
+	}
+
+	// If auto-terminate was enabled but the process exited on its own (e.g. user pressed Ctrl+C),
+	// signal this as an interruption so the caller (e.g. play loop) can stop.
+	if opts.AutoTerminate && !autoTerminated && opts.Interrupted != nil {
+		*opts.Interrupted = true
 	}
 
 	b.db.UpdateSessionStatus(sessionID, db.StatusCompleted)
@@ -248,8 +255,9 @@ func (s *suspendState) setOldState(state interface{}) {
 	s.oldState = state
 }
 
-// runWithPTY runs the command with a pseudo-terminal for interactive use
-func (b *Base) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Session, opts agent.RunOptions) error {
+// runWithPTY runs the command with a pseudo-terminal for interactive use.
+// If autoTerminated is non-nil, it is set to true when the activity monitor killed the process.
+func (b *Base) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Session, opts agent.RunOptions, autoTerminated *bool) error {
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
 		return fmt.Errorf("start pty: %w", err)
@@ -385,7 +393,15 @@ func (b *Base) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sessio
 		}
 	}()
 
-	return cmd.Wait()
+	waitErr := cmd.Wait()
+
+	if autoTerminated != nil && monitor != nil {
+		monitor.mu.Lock()
+		*autoTerminated = monitor.terminated
+		monitor.mu.Unlock()
+	}
+
+	return waitErr
 }
 
 func writeAll(w io.Writer, data []byte) {

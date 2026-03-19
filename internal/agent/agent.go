@@ -37,6 +37,7 @@ type RunOptions struct {
 	CapturedFiles   *[]string      // If non-nil, collect thoughts/shared/*.md paths from output
 	CapturePattern  *regexp.Regexp // If non-nil, override default file capture regex
 	ParentID        string         // Parent session ID (for play command phases)
+	Interrupted     *bool          // If non-nil, set to true when the child exits without auto-terminate firing
 }
 
 // Agent defines the interface for AI coding agents (Claude, Codex, etc.)

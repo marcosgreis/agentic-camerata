@@ -219,6 +219,7 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 		}
 
 		var phaseCaptured []string
+		var interrupted bool
 		err := ag.Run(context.Background(), agent.RunOptions{
 			Command:         mapping.Command,
 			WorkflowType:    mapping.Workflow,
@@ -229,9 +230,14 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 			CapturedFiles:   &phaseCaptured,
 			CapturePattern:  phaseCapturePatterns[phase.Type],
 			ParentID:        sessionID,
+			Interrupted:     &interrupted,
 		})
 		if err != nil {
 			return fmt.Errorf("phase %d (%s): %w", i+1, phase.Type, err)
+		}
+		if interrupted {
+			fmt.Printf("\n=== Playbook interrupted by user ===\n")
+			return fmt.Errorf("interrupted")
 		}
 
 		validated := existingFiles(phaseCaptured)
