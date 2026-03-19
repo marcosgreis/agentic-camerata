@@ -34,6 +34,7 @@ var phaseCapturePatterns = map[string]*regexp.Regexp{
 // PlayCmd runs a multi-phase playbook workflow
 type PlayCmd struct {
 	Playbook string `arg:"" help:"Path to playbook markdown file"`
+	Debug    bool   `help:"Keep background panes alive after completion for debugging"`
 }
 
 // phaseMapping maps playbook phase types to command/workflow types
@@ -150,7 +151,7 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 			if len(group) > 1 && isParallelizable(group) {
 				if _, ok := ag.(paneStarter); ok {
 					fmt.Printf("\n=== Phases %d-%d/%d: %d parallel research phases ===\n", i+1, j, total, len(group))
-					capturedByPhase, err := runParallelResearch(context.Background(), ag, group, cli, taggedFiles, sessionID)
+					capturedByPhase, err := runParallelResearch(context.Background(), ag, group, cli, taggedFiles, sessionID, c.Debug)
 					if err != nil {
 						return fmt.Errorf("parallel research phases %d-%d: %w", i+1, j, err)
 					}
@@ -295,7 +296,7 @@ func isParallelizable(phases []playbook.Phase) bool {
 
 // runParallelResearch runs multiple research phases concurrently, each in its own tmux pane.
 // ag must implement paneStarter. Returns a slice of captured file paths (one entry per phase, in order).
-func runParallelResearch(ctx context.Context, ag agent.Agent, phases []playbook.Phase, cli *CLI, taggedFiles map[string][]string, parentID string) ([][]string, error) {
+func runParallelResearch(ctx context.Context, ag agent.Agent, phases []playbook.Phase, cli *CLI, taggedFiles map[string][]string, parentID string, debug bool) ([][]string, error) {
 	ps := ag.(paneStarter) // caller ensures ag implements paneStarter
 
 	type result struct {
@@ -335,7 +336,7 @@ func runParallelResearch(ctx context.Context, ag agent.Agent, phases []playbook.
 				return
 			}
 
-			files, err := pane.Wait(ctx, captureRe)
+			files, err := pane.Wait(ctx, captureRe, runner.WaitOptions{KeepPane: debug})
 			results[idx].files = files
 			results[idx].err = err
 		}(idx, phase)

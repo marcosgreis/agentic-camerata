@@ -136,6 +136,27 @@ func NewBackgroundPane(shellCmd string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// PaneLocation returns the Location (session, window, pane index) for a pane ID (e.g., "%42").
+func PaneLocation(paneID string) (*Location, error) {
+	out, err := exec.Command("tmux", "display-message", "-t", paneID, "-p", "#{session_name}:#{window_index}:#{pane_index}").Output()
+	if err != nil {
+		return nil, fmt.Errorf("get pane location for %s: %w", paneID, err)
+	}
+	parts := strings.Split(strings.TrimSpace(string(out)), ":")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("unexpected tmux output format: %s", string(out))
+	}
+	window, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("parse window index: %w", err)
+	}
+	pane, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return nil, fmt.Errorf("parse pane index: %w", err)
+	}
+	return &Location{Session: parts[0], Window: window, Pane: pane}, nil
+}
+
 // KillPane kills a tmux pane by its pane ID (e.g., "%42").
 func KillPane(paneID string) error {
 	return exec.Command("tmux", "kill-pane", "-t", paneID).Run()

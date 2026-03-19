@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -412,6 +413,11 @@ func shellescape(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
+// isLinux reports whether the current platform is Linux.
+func isLinux() bool {
+	return runtime.GOOS == "linux"
+}
+
 // PaneSession represents an agent session running in a background tmux pane.
 type PaneSession struct {
 	paneID    string
@@ -441,24 +447,40 @@ func (b *Base) ExecuteInPane(ctx context.Context, cmd *exec.Cmd, opts agent.RunO
 	logFile := filepath.Join(b.outputDir, sessionID+".log")
 	prefix := os.Getenv("CMT_PREFIX")
 
-	loc, err := tmux.CurrentLocation()
-	if err != nil {
-		return nil, fmt.Errorf("get tmux location: %w", err)
-	}
-
-	// Build shell command: cd to workdir, run agent CLI, tee output to log file
+	// Build shell command: cd to workdir, run agent CLI with output captured to log file.
+	// We use `script` to allocate a PTY so the child process (e.g. claude -p) sees an
+	// interactive terminal and streams output in real time instead of buffering.
 	parts := make([]string, len(cmd.Args))
 	for i, arg := range cmd.Args {
 		parts[i] = shellescape(arg)
 	}
-	shellCmd := fmt.Sprintf("cd %s && %s 2>&1 | tee %s",
-		shellescape(workDir),
-		strings.Join(parts, " "),
-		shellescape(logFile))
+	agentCmd := strings.Join(parts, " ")
+	var shellCmd string
+	if isLinux() {
+		// Linux: script -qfc <command> <logfile>
+		shellCmd = fmt.Sprintf("cd %s && script -qfc %s %s",
+			shellescape(workDir),
+			shellescape(agentCmd),
+			shellescape(logFile))
+	} else {
+		// macOS: script -q <logfile> <command...>
+		shellCmd = fmt.Sprintf("cd %s && script -q %s %s",
+			shellescape(workDir),
+			shellescape(logFile),
+			agentCmd)
+	}
 
+	fmt.Fprintf(os.Stderr, "[debug] shellCmd: %s\n", shellCmd)
 	paneID, err := tmux.NewBackgroundPane(shellCmd)
 	if err != nil {
 		return nil, fmt.Errorf("create background pane: %w", err)
+	}
+
+	// Resolve the new pane's location (not the caller's) so cmt jump works correctly.
+	loc, err := tmux.PaneLocation(paneID)
+	if err != nil {
+		tmux.KillPane(paneID) //nolint:errcheck
+		return nil, fmt.Errorf("get pane location: %w", err)
 	}
 
 	session := &db.Session{
@@ -487,12 +509,21 @@ func (b *Base) ExecuteInPane(ctx context.Context, cmd *exec.Cmd, opts agent.RunO
 	}, nil
 }
 
+// WaitOptions configures behavior of Wait.
+type WaitOptions struct {
+	KeepPane bool // If true, don't kill the pane after completion (for debugging).
+}
+
 // Wait polls until the background pane exits, collects captured files, and cleans up.
-func (ps *PaneSession) Wait(ctx context.Context, capturePattern *regexp.Regexp) ([]string, error) {
+func (ps *PaneSession) Wait(ctx context.Context, capturePattern *regexp.Regexp, wopts ...WaitOptions) ([]string, error) {
+	keepPane := len(wopts) > 0 && wopts[0].KeepPane
+
 	for {
 		select {
 		case <-ctx.Done():
-			tmux.KillPane(ps.paneID) //nolint:errcheck
+			if !keepPane {
+				tmux.KillPane(ps.paneID) //nolint:errcheck
+			}
 			ps.db.UpdateSessionStatus(ps.sessionID, db.StatusAbandoned)
 			return nil, ctx.Err()
 		default:
@@ -503,7 +534,9 @@ func (ps *PaneSession) Wait(ctx context.Context, capturePattern *regexp.Regexp) 
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	tmux.KillPane(ps.paneID) //nolint:errcheck
+	if !keepPane {
+		tmux.KillPane(ps.paneID) //nolint:errcheck
+	}
 
 	// Parse log file for captured file paths
 	var captured []string
