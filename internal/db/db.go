@@ -159,6 +159,15 @@ func Open(path string) (*DB, error) {
 		}
 	}
 
+	// Add playbook_file column if it doesn't exist (for existing databases)
+	_, err = conn.Exec(`ALTER TABLE sessions ADD COLUMN playbook_file TEXT`)
+	if err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			conn.Close()
+			return nil, fmt.Errorf("migrate playbook_file column: %w", err)
+		}
+	}
+
 	// Recover stuck sessions: working sessions with dead PIDs should be marked as abandoned
 	rows, err := conn.Query(`SELECT id, pid FROM sessions WHERE status = 'working' AND pid IS NOT NULL`)
 	if err != nil {
