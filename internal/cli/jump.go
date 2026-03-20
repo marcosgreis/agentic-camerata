@@ -36,6 +36,13 @@ func (c *JumpCmd) Run(cli *CLI) error {
 		return fmt.Errorf("session not found: %s", sessionID)
 	}
 
+	if !tmux.InTmux() {
+		return fmt.Errorf("jump requires running inside tmux")
+	}
+	if !session.HasTmuxLocation() {
+		return fmt.Errorf("session %s has no tmux location (created outside tmux)", session.ID)
+	}
+
 	loc := tmux.Location{
 		Session: session.TmuxSession,
 		Window:  session.TmuxWindow,

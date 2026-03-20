@@ -60,15 +60,17 @@ func NewBase(database *db.DB) (*Base, error) {
 // Execute runs a pre-built command with PTY support, session tracking, and activity monitoring.
 // The caller is responsible for building cmd (including setting any agent-specific flags).
 func (b *Base) Execute(ctx context.Context, cmd *exec.Cmd, opts agent.RunOptions) error {
-	// Require tmux
-	if err := tmux.RequireTmux(); err != nil {
-		return fmt.Errorf("cmt requires tmux: %w", err)
-	}
+	var err error
 
-	// Get current tmux location
-	loc, err := tmux.CurrentLocation()
-	if err != nil {
-		return fmt.Errorf("get tmux location: %w", err)
+	// Best-effort tmux location (empty values when not in tmux)
+	var tmuxSession string
+	var tmuxWindow, tmuxPane int
+	if tmux.InTmux() {
+		if loc, err := tmux.CurrentLocation(); err == nil {
+			tmuxSession = loc.Session
+			tmuxWindow = loc.Window
+			tmuxPane = loc.Pane
+		}
 	}
 
 	// Determine working directory
@@ -99,9 +101,9 @@ func (b *Base) Execute(ctx context.Context, cmd *exec.Cmd, opts agent.RunOptions
 		WorkingDirectory: workDir,
 		TaskDescription:  opts.TaskDescription,
 		Prefix:           prefix,
-		TmuxSession:      loc.Session,
-		TmuxWindow:       loc.Window,
-		TmuxPane:         loc.Pane,
+		TmuxSession:      tmuxSession,
+		TmuxWindow:       tmuxWindow,
+		TmuxPane:         tmuxPane,
 		OutputFile:       outputFile,
 		ParentID:         opts.ParentID,
 	}

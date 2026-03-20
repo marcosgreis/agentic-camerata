@@ -63,9 +63,14 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 	}
 
 	sessionID := uuid.New().String()[:8]
-	loc, err := tmux.CurrentLocation()
-	if err != nil {
-		return fmt.Errorf("get tmux location: %w", err)
+	var tmuxSession string
+	var tmuxWindow, tmuxPane int
+	if tmux.InTmux() {
+		if loc, err := tmux.CurrentLocation(); err == nil {
+			tmuxSession = loc.Session
+			tmuxWindow = loc.Window
+			tmuxPane = loc.Pane
+		}
 	}
 	workDir, err := os.Getwd()
 	if err != nil {
@@ -103,9 +108,9 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 		WorkingDirectory: workDir,
 		TaskDescription:  playbookPath,
 		Prefix:           os.Getenv("CMT_PREFIX"),
-		TmuxSession:      loc.Session,
-		TmuxWindow:       loc.Window,
-		TmuxPane:         loc.Pane,
+		TmuxSession:      tmuxSession,
+		TmuxWindow:       tmuxWindow,
+		TmuxPane:         tmuxPane,
 		OutputFile:       filepath.Join(outputDir, sessionID+".log"),
 		PlaybookFile:     savedPath,
 		PID:              os.Getpid(),
