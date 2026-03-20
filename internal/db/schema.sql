@@ -14,10 +14,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- Claude CLI info
     claude_session_id TEXT,
 
-    -- Tmux location (for jumping back)
-    tmux_session TEXT NOT NULL,
-    tmux_window INTEGER NOT NULL,
-    tmux_pane INTEGER NOT NULL,
+    -- Tmux location (for jumping back, empty when not in tmux)
+    tmux_session TEXT NOT NULL DEFAULT '',
+    tmux_window INTEGER NOT NULL DEFAULT 0,
+    tmux_pane INTEGER NOT NULL DEFAULT 0,
 
     -- Output tracking
     output_file TEXT,

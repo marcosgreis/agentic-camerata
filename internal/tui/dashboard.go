@@ -284,7 +284,7 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Jump to session if selected item is a session
 				if d.expandedSelected < len(d.expandedItems) {
 					item := d.expandedItems[d.expandedSelected]
-					if item.Type == VenueItemSession && item.Session != nil {
+					if item.Type == VenueItemSession && item.Session != nil && item.Session.HasTmuxLocation() && tmux.InTmux() {
 						loc := tmux.Location{
 							Session: item.Session.TmuxSession,
 							Window:  item.Session.TmuxWindow,
@@ -299,13 +299,15 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if session == nil {
 					break
 				}
-				loc := tmux.Location{
-					Session: session.TmuxSession,
-					Window:  session.TmuxWindow,
-					Pane:    session.TmuxPane,
+				if session.HasTmuxLocation() && tmux.InTmux() {
+					loc := tmux.Location{
+						Session: session.TmuxSession,
+						Window:  session.TmuxWindow,
+						Pane:    session.TmuxPane,
+					}
+					// Jump to the pane - dashboard stays running in its pane
+					tmux.JumpTo(loc)
 				}
-				// Jump to the pane - dashboard stays running in its pane
-				tmux.JumpTo(loc)
 			}
 
 		case "esc", "backspace":
@@ -591,7 +593,11 @@ func (d *Dashboard) formatSessionInfo(session *db.Session) string {
 	content.WriteString(fmt.Sprintf("Created:           %s\n", session.CreatedAt.Format(time.RFC3339)))
 	content.WriteString(fmt.Sprintf("Updated:           %s\n", session.UpdatedAt.Format(time.RFC3339)))
 	content.WriteString(fmt.Sprintf("Claude Session ID: %s\n", session.ClaudeSessionID))
-	content.WriteString(fmt.Sprintf("Tmux Location:     %s:%d.%d\n", session.TmuxSession, session.TmuxWindow, session.TmuxPane))
+	tmuxLoc := "-"
+	if session.HasTmuxLocation() {
+		tmuxLoc = fmt.Sprintf("%s:%d.%d", session.TmuxSession, session.TmuxWindow, session.TmuxPane)
+	}
+	content.WriteString(fmt.Sprintf("Tmux Location:     %s\n", tmuxLoc))
 	content.WriteString(fmt.Sprintf("Output File:       %s\n", session.OutputFile))
 	content.WriteString(fmt.Sprintf("PID:               %d\n", session.PID))
 
@@ -609,7 +615,11 @@ func (d *Dashboard) formatSessionInfo(session *db.Session) string {
 				content.WriteString(fmt.Sprintf("Playbook:          %s\n", parent.TaskDescription))
 			}
 			content.WriteString(fmt.Sprintf("Parent Created:    %s\n", parent.CreatedAt.Format(time.RFC3339)))
-			content.WriteString(fmt.Sprintf("Parent Tmux:       %s:%d.%d\n", parent.TmuxSession, parent.TmuxWindow, parent.TmuxPane))
+			parentTmuxLoc := "-"
+			if parent.HasTmuxLocation() {
+				parentTmuxLoc = fmt.Sprintf("%s:%d.%d", parent.TmuxSession, parent.TmuxWindow, parent.TmuxPane)
+			}
+			content.WriteString(fmt.Sprintf("Parent Tmux:       %s\n", parentTmuxLoc))
 		} else {
 			content.WriteString("(Parent session not found)\n")
 		}

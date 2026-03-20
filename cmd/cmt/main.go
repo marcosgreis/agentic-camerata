@@ -8,7 +8,6 @@ import (
 
 	"github.com/agentic-camerata/cmt/internal/cli"
 	"github.com/agentic-camerata/cmt/internal/db"
-	"github.com/agentic-camerata/cmt/internal/tmux"
 )
 
 var version = "dev"
@@ -24,14 +23,6 @@ func main() {
 			"version": version,
 		},
 	)
-
-	// Check tmux requirement
-	if err := tmux.RequireTmux(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		fmt.Fprintln(os.Stderr, "cmt requires running inside a tmux session.")
-		fmt.Fprintln(os.Stderr, "Start tmux with: tmux new-session -s main")
-		os.Exit(1)
-	}
 
 	// Open database
 	database, err := db.Open(c.DB)

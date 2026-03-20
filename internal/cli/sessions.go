@@ -44,7 +44,10 @@ func (c *SessionsCmd) Run(cli *CLI) error {
 	for _, s := range sessions {
 		age := formatAge(s.CreatedAt)
 		dir := shortenPath(s.WorkingDirectory, 30)
-		tmuxLoc := fmt.Sprintf("%s:%d.%d", s.TmuxSession, s.TmuxWindow, s.TmuxPane)
+		tmuxLoc := "-"
+		if s.HasTmuxLocation() {
+			tmuxLoc = fmt.Sprintf("%s:%d.%d", s.TmuxSession, s.TmuxWindow, s.TmuxPane)
+		}
 
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
 			s.ID, s.Status, s.WorkflowType, dir, tmuxLoc, age)

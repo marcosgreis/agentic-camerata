@@ -53,6 +53,11 @@ type Session struct {
 	ParentID         string     // ID of parent play session (empty if top-level)
 }
 
+// HasTmuxLocation reports whether this session has a recorded tmux location.
+func (s *Session) HasTmuxLocation() bool {
+	return s.TmuxSession != ""
+}
+
 // CreateSession creates a new session in the database
 func (db *DB) CreateSession(s *Session) error {
 	query := `
