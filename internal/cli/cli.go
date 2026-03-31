@@ -26,7 +26,7 @@ type CLI struct {
 	Verbose    bool   `short:"v" help:"Enable verbose output"`
 	Autonomous bool   `short:"a" help:"Enable autonomous mode (skip permission prompts)" env:"CMT_AUTONOMOUS"`
 	Model      string `help:"Override default model for this invocation" env:"CMT_MODEL" optional:""`
-	Agent      string `help:"Agent backend to use (claude, codex)" default:"claude" env:"CMT_AGENT" optional:""`
+	Agent      string `help:"Agent backend to use (claude, codex, amp)" default:"claude" env:"CMT_AGENT" optional:""`
 
 	// Shared state (populated by Run)
 	database *db.DB
