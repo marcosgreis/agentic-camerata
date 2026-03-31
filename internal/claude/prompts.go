@@ -12,7 +12,7 @@ var promptPrefixes = map[agent.CommandType]string{
 	agent.CommandResearch:   "/research_codebase",
 	agent.CommandPlan:       "/create_plan",
 	agent.CommandImplement:  "/implement_plan implement all phases ignoring any manual verification steps",
-	agent.CommandFixTest:    "Analyze and fix the failing test at: ",
+	agent.CommandFixTest:    "Analyze and fix the failing test at:",
 	agent.CommandLookAndFix: "Take a look at this repo and search for comments tagged with %s and propose how to solve them. If a class name or filename is provided as a parameter, focus the search on that specific file or class.",
 	agent.CommandQuick:      "",
 	agent.CommandReview:     "/review_code",
