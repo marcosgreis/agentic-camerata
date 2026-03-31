@@ -51,9 +51,20 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 	}
 
 	database := cli.Database()
-	ag, err := newAgent(cli.Agent, database)
-	if err != nil {
-		return err
+	agents := make(map[string]agent.Agent)
+	getAgent := func(agentType string) (agent.Agent, error) {
+		if agentType == "" {
+			agentType = cli.Agent
+		}
+		if ag, ok := agents[agentType]; ok {
+			return ag, nil
+		}
+		ag, err := newAgent(agentType, database)
+		if err != nil {
+			return nil, err
+		}
+		agents[agentType] = ag
+		return ag, nil
 	}
 
 	// Create parent play session
@@ -220,7 +231,11 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 
 		var phaseCaptured []string
 		var interrupted bool
-		err := ag.Run(context.Background(), agent.RunOptions{
+		ag, err := getAgent(phase.Agent)
+		if err != nil {
+			return fmt.Errorf("phase %d (%s): %w", i+1, phase.Type, err)
+		}
+		err = ag.Run(context.Background(), agent.RunOptions{
 			Command:         mapping.Command,
 			WorkflowType:    mapping.Workflow,
 			TaskDescription: task,

@@ -14,6 +14,7 @@ type Phase struct {
 	Uses    []string // optional tags of phases whose outputs to use
 	Include []string // optional file paths to prepend to the phase prompt
 	Pick    string   // "true" for fzf selector, "last" for latest file (implement only)
+	Agent   string   // optional agent backend override: "claude", "codex", "amp"
 }
 
 // Playbook represents a parsed playbook file
@@ -56,7 +57,7 @@ func ParseContent(content string) (*Playbook, error) {
 		if strings.HasPrefix(line, "## ") {
 			// Save previous phase if any
 			if currentType != "" {
-				tag, uses, include, pick, rest := extractMetadata(currentLines)
+				tag, uses, include, pick, agentVal, rest := extractMetadata(currentLines)
 				phases = append(phases, Phase{
 					Type:    currentType,
 					Content: strings.TrimSpace(strings.Join(rest, "\n")),
@@ -64,6 +65,7 @@ func ParseContent(content string) (*Playbook, error) {
 					Uses:    uses,
 					Include: include,
 					Pick:    pick,
+					Agent:   agentVal,
 				})
 			}
 
@@ -88,7 +90,7 @@ func ParseContent(content string) (*Playbook, error) {
 
 	// Save last phase
 	if currentType != "" {
-		tag, uses, include, pick, rest := extractMetadata(currentLines)
+		tag, uses, include, pick, agentVal, rest := extractMetadata(currentLines)
 		phases = append(phases, Phase{
 			Type:    currentType,
 			Content: strings.TrimSpace(strings.Join(rest, "\n")),
@@ -96,6 +98,7 @@ func ParseContent(content string) (*Playbook, error) {
 			Uses:    uses,
 			Include: include,
 			Pick:    pick,
+			Agent:   agentVal,
 		})
 	}
 
@@ -127,13 +130,21 @@ func ParseContent(content string) (*Playbook, error) {
 		}
 	}
 
+	// Validate agent values
+	validAgents := map[string]bool{"claude": true, "codex": true, "amp": true}
+	for i, p := range phases {
+		if p.Agent != "" && !validAgents[p.Agent] {
+			return nil, fmt.Errorf("phase %d (%s): unknown agent %q (valid: claude, codex, amp)", i+1, p.Type, p.Agent)
+		}
+	}
+
 	// Validate play phases: must have a single-line .md file path, no metadata
 	for i, p := range phases {
 		if p.Type != "play" {
 			continue
 		}
-		if p.Tag != "" || len(p.Uses) > 0 || len(p.Include) > 0 {
-			return nil, fmt.Errorf("phase %d (play): metadata (tag/uses/include) not allowed on play phases", i+1)
+		if p.Tag != "" || len(p.Uses) > 0 || len(p.Include) > 0 || p.Agent != "" {
+			return nil, fmt.Errorf("phase %d (play): metadata (tag/uses/include/agent) not allowed on play phases", i+1)
 		}
 		if p.Content == "" {
 			return nil, fmt.Errorf("phase %d (play): missing playbook file path", i+1)
@@ -169,9 +180,9 @@ func ParseContent(content string) (*Playbook, error) {
 	return &Playbook{Phases: phases}, nil
 }
 
-// extractMetadata parses tag:, uses:, include:, and pick: lines from the top of phase body lines.
-// Returns tag, uses, include, pick, and remaining content lines with metadata stripped.
-func extractMetadata(lines []string) (tag string, uses []string, include []string, pick string, rest []string) {
+// extractMetadata parses tag:, uses:, include:, pick:, and agent: lines from the top of phase body lines.
+// Returns tag, uses, include, pick, agentVal, and remaining content lines with metadata stripped.
+func extractMetadata(lines []string) (tag string, uses []string, include []string, pick string, agentVal string, rest []string) {
 	i := 0
 	for i < len(lines) {
 		trimmed := strings.TrimSpace(lines[i])
@@ -217,6 +228,11 @@ func extractMetadata(lines []string) (tag string, uses []string, include []strin
 			default:
 				pick = val
 			}
+			i++
+			continue
+		}
+		if strings.HasPrefix(lower, "agent:") {
+			agentVal = strings.TrimSpace(strings.ToLower(trimmed[6:]))
 			i++
 			continue
 		}

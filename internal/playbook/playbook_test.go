@@ -228,6 +228,37 @@ Build it.
 			wantErr: true,
 		},
 		{
+			name:    "play phase with agent not allowed",
+			content: "## Play\nagent: codex\ntestdata/nested.md\n",
+			wantErr: true,
+		},
+		{
+			name: "phase with agent override",
+			content: `## Research
+agent: codex
+Explore the codebase.
+`,
+			want: []Phase{
+				{Type: "research", Content: "Explore the codebase.", Agent: "codex"},
+			},
+		},
+		{
+			name: "phase with agent and tag",
+			content: `## Research
+tag: r1
+agent: amp
+Explore the codebase.
+`,
+			want: []Phase{
+				{Type: "research", Content: "Explore the codebase.", Tag: "r1", Agent: "amp"},
+			},
+		},
+		{
+			name:    "invalid agent value",
+			content: "## Research\nagent: gemini\nExplore\n",
+			wantErr: true,
+		},
+		{
 			name: "exit phase terminates playbook",
 			content: `## Research
 Explore the codebase.
@@ -277,6 +308,9 @@ This should not run.
 				}
 				if !slices.Equal(phase.Include, tt.want[i].Include) {
 					t.Errorf("phase %d: include = %v, want %v", i, phase.Include, tt.want[i].Include)
+				}
+				if phase.Agent != tt.want[i].Agent {
+					t.Errorf("phase %d: agent = %q, want %q", i, phase.Agent, tt.want[i].Agent)
 				}
 			}
 		})
