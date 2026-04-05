@@ -43,49 +43,40 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
+	success := false
+	defer func() {
+		if !success {
+			conn.Close()
+		}
+	}()
+
 	// Enable WAL mode for better concurrency
 	if _, err := conn.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		conn.Close()
 		return nil, fmt.Errorf("enable WAL mode: %w", err)
 	}
 
 	// Run migrations
 	if _, err := conn.Exec(schema); err != nil {
-		conn.Close()
 		return nil, fmt.Errorf("run schema: %w", err)
 	}
 
 	// Migrate legacy 'active' status to 'waiting'
 	if _, err := conn.Exec(`UPDATE sessions SET status = 'waiting' WHERE status = 'active'`); err != nil {
-		conn.Close()
 		return nil, fmt.Errorf("migrate legacy status: %w", err)
 	}
 
-	// Add prefix column if it doesn't exist (for existing databases)
-	_, err = conn.Exec(`ALTER TABLE sessions ADD COLUMN prefix TEXT`)
-	if err != nil {
-		// Ignore error if column already exists (SQLite returns "duplicate column name")
-		if !strings.Contains(err.Error(), "duplicate column") {
-			conn.Close()
-			return nil, fmt.Errorf("migrate prefix column: %w", err)
-		}
+	// Add session columns if they don't exist (for existing databases)
+	if err := addColumnIfNotExists(conn, `ALTER TABLE sessions ADD COLUMN prefix TEXT`, "sessions prefix column"); err != nil {
+		return nil, err
 	}
-
-	// Add deleted_at column if it doesn't exist (for existing databases)
-	_, err = conn.Exec(`ALTER TABLE sessions ADD COLUMN deleted_at DATETIME`)
-	if err != nil {
-		// Ignore error if column already exists
-		if !strings.Contains(err.Error(), "duplicate column") {
-			conn.Close()
-			return nil, fmt.Errorf("migrate deleted_at column: %w", err)
-		}
+	if err := addColumnIfNotExists(conn, `ALTER TABLE sessions ADD COLUMN deleted_at DATETIME`, "sessions deleted_at column"); err != nil {
+		return nil, err
 	}
-
-	// Create index on deleted_at (must be after column migration)
-	_, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_sessions_deleted ON sessions(deleted_at)`)
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("create deleted_at index: %w", err)
+	if err := addColumnIfNotExists(conn, `ALTER TABLE sessions ADD COLUMN parent_id TEXT`, "sessions parent_id column"); err != nil {
+		return nil, err
+	}
+	if err := addColumnIfNotExists(conn, `ALTER TABLE sessions ADD COLUMN playbook_file TEXT`, "sessions playbook_file column"); err != nil {
+		return nil, err
 	}
 
 	// Create todos table if it doesn't exist (for existing databases)
@@ -101,77 +92,40 @@ func Open(path string) (*DB, error) {
 		channel TEXT,
 		sender TEXT
 	)`); err != nil {
-		conn.Close()
 		return nil, fmt.Errorf("migrate todos table: %w", err)
 	}
-	if _, err := conn.Exec(`CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status)`); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("migrate todos status index: %w", err)
+
+	// Add todos columns if they don't exist
+	if err := addColumnIfNotExists(conn, `ALTER TABLE todos ADD COLUMN idempotency_key TEXT`, "todos idempotency_key column"); err != nil {
+		return nil, err
 	}
-	if _, err := conn.Exec(`CREATE INDEX IF NOT EXISTS idx_todos_created ON todos(created_at DESC)`); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("migrate todos created index: %w", err)
+	if err := addColumnIfNotExists(conn, `ALTER TABLE todos ADD COLUMN full_message TEXT`, "todos full_message column"); err != nil {
+		return nil, err
+	}
+	if err := addColumnIfNotExists(conn, `ALTER TABLE todos ADD COLUMN deleted_at DATETIME`, "todos deleted_at column"); err != nil {
+		return nil, err
 	}
 
-	// Add idempotency_key column to todos if it doesn't exist
-	_, err = conn.Exec(`ALTER TABLE todos ADD COLUMN idempotency_key TEXT`)
-	if err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") {
-			conn.Close()
-			return nil, fmt.Errorf("migrate todos idempotency_key column: %w", err)
-		}
+	// Create indexes (must be after column migrations)
+	indexes := []struct {
+		stmt        string
+		description string
+	}{
+		{`CREATE INDEX IF NOT EXISTS idx_sessions_deleted ON sessions(deleted_at)`, "deleted_at index"},
+		{`CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status)`, "todos status index"},
+		{`CREATE INDEX IF NOT EXISTS idx_todos_created ON todos(created_at DESC)`, "todos created index"},
+		{`CREATE UNIQUE INDEX IF NOT EXISTS idx_todos_idempotency ON todos(idempotency_key) WHERE idempotency_key IS NOT NULL`, "todos idempotency index"},
+		{`CREATE INDEX IF NOT EXISTS idx_todos_deleted ON todos(deleted_at)`, "todos deleted_at index"},
 	}
-	_, err = conn.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_todos_idempotency ON todos(idempotency_key) WHERE idempotency_key IS NOT NULL`)
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("create todos idempotency index: %w", err)
-	}
-
-	// Add full_message column to todos if it doesn't exist
-	_, err = conn.Exec(`ALTER TABLE todos ADD COLUMN full_message TEXT`)
-	if err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") {
-			conn.Close()
-			return nil, fmt.Errorf("migrate todos full_message column: %w", err)
-		}
-	}
-
-	// Add deleted_at column to todos if it doesn't exist
-	_, err = conn.Exec(`ALTER TABLE todos ADD COLUMN deleted_at DATETIME`)
-	if err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") {
-			conn.Close()
-			return nil, fmt.Errorf("migrate todos deleted_at column: %w", err)
-		}
-	}
-	_, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_todos_deleted ON todos(deleted_at)`)
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("create todos deleted_at index: %w", err)
-	}
-
-	// Add parent_id column if it doesn't exist (for existing databases)
-	_, err = conn.Exec(`ALTER TABLE sessions ADD COLUMN parent_id TEXT`)
-	if err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") {
-			conn.Close()
-			return nil, fmt.Errorf("migrate parent_id column: %w", err)
-		}
-	}
-
-	// Add playbook_file column if it doesn't exist (for existing databases)
-	_, err = conn.Exec(`ALTER TABLE sessions ADD COLUMN playbook_file TEXT`)
-	if err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") {
-			conn.Close()
-			return nil, fmt.Errorf("migrate playbook_file column: %w", err)
+	for _, idx := range indexes {
+		if _, err := conn.Exec(idx.stmt); err != nil {
+			return nil, fmt.Errorf("create %s: %w", idx.description, err)
 		}
 	}
 
 	// Recover stuck sessions: working sessions with dead PIDs should be marked as abandoned
 	rows, err := conn.Query(`SELECT id, pid FROM sessions WHERE status = 'working' AND pid IS NOT NULL`)
 	if err != nil {
-		conn.Close()
 		return nil, fmt.Errorf("query stuck sessions: %w", err)
 	}
 
@@ -194,7 +148,17 @@ func Open(path string) (*DB, error) {
 		conn.Exec(`UPDATE sessions SET status = 'abandoned', updated_at = CURRENT_TIMESTAMP WHERE id = ?`, id)
 	}
 
+	success = true
 	return &DB{conn: conn, path: path}, nil
+}
+
+// addColumnIfNotExists runs an ALTER TABLE ADD COLUMN and ignores "duplicate column" errors.
+func addColumnIfNotExists(conn *sql.DB, stmt, description string) error {
+	_, err := conn.Exec(stmt)
+	if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("migrate %s: %w", description, err)
+	}
+	return nil
 }
 
 // isProcessRunning checks if a process with the given PID is still running

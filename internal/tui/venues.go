@@ -20,10 +20,7 @@ const (
 	// Future: VenueDisplayList, VenueDisplayCompact, etc.
 )
 
-const (
-	maxVenueBoxWidth  = 30
-	maxVenueBoxHeight = 25
-)
+const maxVenueBoxWidth = 30
 
 // Venue represents an aggregated working directory with session counts
 type Venue struct {
