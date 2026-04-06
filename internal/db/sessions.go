@@ -212,67 +212,60 @@ func (db *DB) DeleteSession(id string) error {
 	return nil
 }
 
-// scanSession scans a single row into a Session
-func scanSession(row *sql.Row) (*Session, error) {
-	var s Session
+// scanner is satisfied by both *sql.Row and *sql.Rows.
+type scanner interface {
+	Scan(dest ...any) error
+}
+
+// scanSessionFrom scans a session from any scanner (Row or Rows).
+func scanSessionFrom(s scanner) (*Session, error) {
+	var sess Session
 	var taskDesc, prefix, claudeID, outputFile, playbookFile, parentID sql.NullString
 	var pid sql.NullInt64
 	var deletedAt sql.NullTime
 
-	err := row.Scan(
-		&s.ID, &s.CreatedAt, &s.UpdatedAt, &s.WorkflowType, &s.Status, &s.WorkingDirectory,
-		&taskDesc, &prefix, &claudeID, &s.TmuxSession, &s.TmuxWindow, &s.TmuxPane,
+	err := s.Scan(
+		&sess.ID, &sess.CreatedAt, &sess.UpdatedAt, &sess.WorkflowType, &sess.Status, &sess.WorkingDirectory,
+		&taskDesc, &prefix, &claudeID, &sess.TmuxSession, &sess.TmuxWindow, &sess.TmuxPane,
 		&outputFile, &playbookFile, &pid, &deletedAt, &parentID,
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	sess.TaskDescription = taskDesc.String
+	sess.Prefix = prefix.String
+	sess.ClaudeSessionID = claudeID.String
+	sess.OutputFile = outputFile.String
+	sess.PlaybookFile = playbookFile.String
+	sess.PID = int(pid.Int64)
+	if deletedAt.Valid {
+		sess.DeletedAt = &deletedAt.Time
+	}
+	sess.ParentID = parentID.String
+
+	return &sess, nil
+}
+
+// scanSession scans a single row into a Session
+func scanSession(row *sql.Row) (*Session, error) {
+	s, err := scanSessionFrom(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("scan session: %w", err)
 	}
-
-	s.TaskDescription = taskDesc.String
-	s.Prefix = prefix.String
-	s.ClaudeSessionID = claudeID.String
-	s.OutputFile = outputFile.String
-	s.PlaybookFile = playbookFile.String
-	s.PID = int(pid.Int64)
-	if deletedAt.Valid {
-		s.DeletedAt = &deletedAt.Time
-	}
-	s.ParentID = parentID.String
-
-	return &s, nil
+	return s, nil
 }
 
 // scanSessionRows scans rows into a Session
 func scanSessionRows(rows *sql.Rows) (*Session, error) {
-	var s Session
-	var taskDesc, prefix, claudeID, outputFile, playbookFile, parentID sql.NullString
-	var pid sql.NullInt64
-	var deletedAt sql.NullTime
-
-	err := rows.Scan(
-		&s.ID, &s.CreatedAt, &s.UpdatedAt, &s.WorkflowType, &s.Status, &s.WorkingDirectory,
-		&taskDesc, &prefix, &claudeID, &s.TmuxSession, &s.TmuxWindow, &s.TmuxPane,
-		&outputFile, &playbookFile, &pid, &deletedAt, &parentID,
-	)
+	s, err := scanSessionFrom(rows)
 	if err != nil {
 		return nil, fmt.Errorf("scan session: %w", err)
 	}
-
-	s.TaskDescription = taskDesc.String
-	s.Prefix = prefix.String
-	s.ClaudeSessionID = claudeID.String
-	s.OutputFile = outputFile.String
-	s.PlaybookFile = playbookFile.String
-	s.PID = int(pid.Int64)
-	if deletedAt.Valid {
-		s.DeletedAt = &deletedAt.Time
-	}
-	s.ParentID = parentID.String
-
-	return &s, nil
+	return s, nil
 }
 
 // ListDeletedSessions retrieves all sessions with deleted status
