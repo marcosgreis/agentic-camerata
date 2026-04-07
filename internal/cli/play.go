@@ -2,8 +2,10 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -17,6 +19,16 @@ import (
 	"github.com/agentic-camerata/cmt/internal/tmux"
 )
 
+// PlayState holds the state persisted between phases so a play session can be resumed.
+type PlayState struct {
+	NextPhase       int                 `json:"next_phase"`
+	Phases          []playbook.Phase    `json:"phases"`
+	ResearchFiles   []string            `json:"research_files"`
+	PlanFile        string              `json:"plan_file"`
+	TaggedFiles     map[string][]string `json:"tagged_files"`
+	PhaseSessionIDs map[int]string      `json:"phase_session_ids"` // phase index → Claude session ID
+}
+
 // phaseCapturePatterns maps phase types to their file capture regex.
 var phaseCapturePatterns = map[string]*regexp.Regexp{
 	"research": regexp.MustCompile(`(thoughts/shared/research/\S+\.md)`),
@@ -26,7 +38,8 @@ var phaseCapturePatterns = map[string]*regexp.Regexp{
 
 // PlayCmd runs a multi-phase playbook workflow
 type PlayCmd struct {
-	Playbook string `arg:"" help:"Path to playbook markdown file"`
+	Playbook string `arg:"" optional:"" help:"Path to playbook markdown file"`
+	Resume   string `name:"resume" short:"r" optional:"*" help:"Resume an abandoned play session; use --resume for interactive selection or --resume SESSION_ID for a specific session"`
 }
 
 // phaseMapping maps playbook phase types to command/workflow types
@@ -45,29 +58,21 @@ var phaseMapping = map[string]struct {
 
 // Run executes the play command
 func (c *PlayCmd) Run(cli *CLI) (retErr error) {
+	database := cli.Database()
+
+	if c.Resume != "" {
+		return c.doResume(cli, database)
+	}
+
+	if c.Playbook == "" {
+		return fmt.Errorf("either a playbook file or --resume is required")
+	}
+
 	pb, err := playbook.Parse(c.Playbook)
 	if err != nil {
 		return err
 	}
 
-	database := cli.Database()
-	agents := make(map[string]agent.Agent)
-	getAgent := func(agentType string) (agent.Agent, error) {
-		if agentType == "" {
-			agentType = cli.Agent
-		}
-		if ag, ok := agents[agentType]; ok {
-			return ag, nil
-		}
-		ag, err := newAgent(agentType, database)
-		if err != nil {
-			return nil, err
-		}
-		agents[agentType] = ag
-		return ag, nil
-	}
-
-	// Create parent play session
 	playbookPath, err := filepath.Abs(c.Playbook)
 	if err != nil {
 		return fmt.Errorf("resolve playbook path: %w", err)
@@ -133,19 +138,193 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 	defer func() {
 		if retErr != nil {
 			database.UpdateSessionStatus(sessionID, db.StatusAbandoned)
+			retErr = fmt.Errorf("%w\n\nto resume this session run: cmt play --resume %s", retErr, sessionID)
 		} else {
 			database.UpdateSessionStatus(sessionID, db.StatusCompleted)
 		}
 	}()
 
-	var researchFiles []string
-	var planFile string
-	taggedFiles := make(map[string][]string)
-	total := len(pb.Phases)
+	return runPlaybook(cli, database, sessionID, pb, 0, PlayState{})
+}
 
-	for i := 0; i < len(pb.Phases); i++ {
+// doResume resumes an abandoned play session.
+func (c *PlayCmd) doResume(cli *CLI, database *db.DB) (retErr error) {
+	var session *db.Session
+	var err error
+
+	if c.Resume == "*" {
+		// Interactive selection
+		session, err = selectAbandonedPlaySession(database)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Resume by specific session ID
+		session, err = database.GetSession(c.Resume)
+		if err != nil {
+			return fmt.Errorf("get session: %w", err)
+		}
+		if session == nil {
+			return fmt.Errorf("session %s not found", c.Resume)
+		}
+		if session.WorkflowType != db.WorkflowPlay {
+			return fmt.Errorf("session %s is not a play session", c.Resume)
+		}
+		if session.Status != db.StatusAbandoned {
+			return fmt.Errorf("session %s is not abandoned (status: %s)", c.Resume, session.Status)
+		}
+	}
+
+	// Parse play state
+	var state PlayState
+	if session.PlayState != "" {
+		if err := json.Unmarshal([]byte(session.PlayState), &state); err != nil {
+			return fmt.Errorf("parse play state: %w", err)
+		}
+	}
+
+	// Build the playbook: use pre-expanded phases from state, or re-parse from file
+	var pb *playbook.Playbook
+	if len(state.Phases) > 0 {
+		pb = &playbook.Playbook{Phases: state.Phases}
+	} else {
+		if session.PlaybookFile == "" {
+			return fmt.Errorf("session %s has no playbook file", session.ID)
+		}
+		pb, err = playbook.Parse(session.PlaybookFile)
+		if err != nil {
+			return fmt.Errorf("parse playbook: %w", err)
+		}
+	}
+
+	fmt.Printf("Resuming play session %s from phase %d/%d\n", session.ID, state.NextPhase+1, len(pb.Phases))
+
+	// Re-activate the session
+	if err := database.UpdateSessionStatus(session.ID, db.StatusWorking); err != nil {
+		return fmt.Errorf("update session status: %w", err)
+	}
+	database.UpdateSessionPID(session.ID, os.Getpid()) //nolint:errcheck
+
+	defer func() {
+		if retErr != nil {
+			database.UpdateSessionStatus(session.ID, db.StatusAbandoned)
+			retErr = fmt.Errorf("%w\n\nto resume this session run: cmt play --resume %s", retErr, session.ID)
+		} else {
+			database.UpdateSessionStatus(session.ID, db.StatusCompleted)
+		}
+	}()
+
+	return runPlaybook(cli, database, session.ID, pb, state.NextPhase, state)
+}
+
+// selectAbandonedPlaySession finds an abandoned play session interactively.
+func selectAbandonedPlaySession(database *db.DB) (*db.Session, error) {
+	sessions, err := database.ListAbandonedPlaySessions()
+	if err != nil {
+		return nil, err
+	}
+	switch len(sessions) {
+	case 0:
+		return nil, fmt.Errorf("no abandoned play sessions found")
+	case 1:
+		fmt.Printf("Resuming session %s (%s)\n", sessions[0].ID, sessions[0].PlaybookFile)
+		return sessions[0], nil
+	default:
+		lines := make([]string, len(sessions))
+		for i, s := range sessions {
+			lines[i] = fmt.Sprintf("%s  %s  %s", s.ID, s.CreatedAt.Format("2006-01-02 15:04"), s.PlaybookFile)
+		}
+		selected, err := fzfSelect(lines)
+		if err != nil {
+			return nil, err
+		}
+		id := strings.Fields(selected)[0]
+		return database.GetSession(id)
+	}
+}
+
+// fzfSelect presents options to fzf and returns the selected line.
+func fzfSelect(options []string) (string, error) {
+	cmd := exec.Command("fzf")
+	cmd.Stdin = strings.NewReader(strings.Join(options, "\n"))
+	cmd.Stderr = os.Stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("fzf selection cancelled")
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// savePlayState persists play state to the database.
+func savePlayState(database *db.DB, sessionID string, nextPhase int, phases []playbook.Phase, researchFiles []string, planFile string, taggedFiles map[string][]string, phaseSessionIDs map[int]string) {
+	state := PlayState{
+		NextPhase:       nextPhase,
+		Phases:          phases,
+		ResearchFiles:   researchFiles,
+		PlanFile:        planFile,
+		TaggedFiles:     taggedFiles,
+		PhaseSessionIDs: phaseSessionIDs,
+	}
+	if data, err := json.Marshal(state); err == nil {
+		database.UpdatePlayState(sessionID, string(data)) //nolint:errcheck
+	}
+}
+
+// findLastPhaseOfType returns the index of the last phase with the given type
+// before currentIndex, or currentIndex if none found.
+func findLastPhaseOfType(phases []playbook.Phase, currentIndex int, phaseType string) int {
+	for j := currentIndex - 1; j >= 0; j-- {
+		if phases[j].Type == phaseType {
+			return j
+		}
+	}
+	return currentIndex
+}
+
+// findLastPhaseWithTag returns the index of the last phase with the given tag
+// before currentIndex, or currentIndex if none found.
+func findLastPhaseWithTag(phases []playbook.Phase, currentIndex int, tag string) int {
+	for j := currentIndex - 1; j >= 0; j-- {
+		if phases[j].Tag == tag {
+			return j
+		}
+	}
+	return currentIndex
+}
+
+// runPlaybook runs the phases of a playbook starting from startPhase,
+// restoring context from state for resumed sessions.
+func runPlaybook(cli *CLI, database *db.DB, sessionID string, pb *playbook.Playbook, startPhase int, state PlayState) error {
+	agents := make(map[string]agent.Agent)
+	getAgent := func(agentType string) (agent.Agent, error) {
+		if agentType == "" {
+			agentType = cli.Agent
+		}
+		if ag, ok := agents[agentType]; ok {
+			return ag, nil
+		}
+		ag, err := newAgent(agentType, database)
+		if err != nil {
+			return nil, err
+		}
+		agents[agentType] = ag
+		return ag, nil
+	}
+
+	researchFiles := state.ResearchFiles
+	planFile := state.PlanFile
+	taggedFiles := state.TaggedFiles
+	if taggedFiles == nil {
+		taggedFiles = make(map[string][]string)
+	}
+	phaseSessionIDs := state.PhaseSessionIDs
+	if phaseSessionIDs == nil {
+		phaseSessionIDs = make(map[int]string)
+	}
+
+	for i := startPhase; i < len(pb.Phases); i++ {
 		phase := pb.Phases[i]
-		total = len(pb.Phases)
+		total := len(pb.Phases)
 
 		if phase.Type == "exit" {
 			fmt.Printf("\n=== Phase %d/%d: exit ===\n", i+1, total)
@@ -214,14 +393,31 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 				filesToPass = researchFiles
 			case "implement":
 				if task == "" {
-					if planFile == "" {
-						return fmt.Errorf("implement phase has no content and no plan file was captured from previous phases")
+					if planFile != "" {
+						task = planFile
 					}
-					task = planFile
+					// If planFile is still empty, the rollback check below will handle it
 				} else if planFile != "" {
 					filesToPass = []string{planFile}
 				}
 			}
+		}
+
+		// Automatic rollback: detect missing prerequisite outputs before running
+		rollbackTo := -1
+		if phase.Type == "implement" && phase.Pick == "" && len(phase.Uses) == 0 && task == "" && planFile == "" {
+			rollbackTo = findLastPhaseOfType(pb.Phases, i, "plan")
+		}
+		for _, ref := range phase.Uses {
+			if len(taggedFiles[ref]) == 0 {
+				rollbackTo = findLastPhaseWithTag(pb.Phases, i, ref)
+				break
+			}
+		}
+		if rollbackTo >= 0 {
+			savePlayState(database, sessionID, rollbackTo, pb.Phases, researchFiles, planFile, taggedFiles, phaseSessionIDs)
+			return fmt.Errorf("phase %d (%s): missing prerequisite output; rolling back to phase %d (%s)",
+				i+1, phase.Type, rollbackTo+1, pb.Phases[rollbackTo].Type)
 		}
 
 		allFiles := append(phase.Include, filesToPass...)
@@ -229,23 +425,33 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 			task = PrependFilesToTask(allFiles, task)
 		}
 
+		// Save state before running so resume starts from this phase if the agent fails
+		savePlayState(database, sessionID, i, pb.Phases, researchFiles, planFile, taggedFiles, phaseSessionIDs)
+
 		var phaseCaptured []string
 		var interrupted bool
+		var capturedSessionID string
+
+		// If this phase was previously run (e.g. rolled back to), resume the Claude session
+		previousClaudeSessionID := phaseSessionIDs[i]
+
 		ag, err := getAgent(phase.Agent)
 		if err != nil {
 			return fmt.Errorf("phase %d (%s): %w", i+1, phase.Type, err)
 		}
 		err = ag.Run(context.Background(), agent.RunOptions{
-			Command:         mapping.Command,
-			WorkflowType:    mapping.Workflow,
-			TaskDescription: task,
-			Model:           cli.Model,
-			AutoTerminate:   i < total-1,
-			AutonomousMode:  cli.Autonomous,
-			CapturedFiles:   &phaseCaptured,
-			CapturePattern:  phaseCapturePatterns[phase.Type],
-			ParentID:        sessionID,
-			Interrupted:     &interrupted,
+			Command:           mapping.Command,
+			WorkflowType:      mapping.Workflow,
+			TaskDescription:   task,
+			Model:             cli.Model,
+			AutoTerminate:     i < total-1,
+			AutonomousMode:    cli.Autonomous,
+			CapturedFiles:     &phaseCaptured,
+			CapturePattern:    phaseCapturePatterns[phase.Type],
+			CapturedSessionID: &capturedSessionID,
+			ResumeSessionID:   previousClaudeSessionID,
+			ParentID:          sessionID,
+			Interrupted:       &interrupted,
 		})
 		if err != nil {
 			return fmt.Errorf("phase %d (%s): %w", i+1, phase.Type, err)
@@ -253,6 +459,11 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 		if interrupted {
 			fmt.Printf("\n=== Playbook interrupted by user ===\n")
 			return fmt.Errorf("interrupted")
+		}
+
+		// Store the Claude session ID for this phase (for future rollback/resume)
+		if capturedSessionID != "" {
+			phaseSessionIDs[i] = capturedSessionID
 		}
 
 		validated := existingFiles(phaseCaptured)
@@ -272,9 +483,12 @@ func (c *PlayCmd) Run(cli *CLI) (retErr error) {
 		if len(phaseCaptured) > 0 {
 			fmt.Printf("--- Captured files: %s\n", strings.Join(phaseCaptured, ", "))
 		}
+
+		// Save state after successful phase so resume skips it next time
+		savePlayState(database, sessionID, i+1, pb.Phases, researchFiles, planFile, taggedFiles, phaseSessionIDs)
 	}
 
-	fmt.Printf("\n=== Playbook complete (%d phases) ===\n", total)
+	fmt.Printf("\n=== Playbook complete (%d phases) ===\n", len(pb.Phases))
 	return nil
 }
 

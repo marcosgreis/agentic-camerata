@@ -34,9 +34,10 @@ type RunOptions struct {
 	ResumeSessionID string         // If non-empty, pass --resume to agent. "*" means interactive picker
 	SkipTracking    bool           // If true, skip DB session creation and activity monitoring
 	AutoTerminate   bool           // If true, send kill when session goes idle after working
-	CapturedFiles   *[]string      // If non-nil, collect thoughts/shared/*.md paths from output
-	CapturePattern  *regexp.Regexp // If non-nil, override default file capture regex
-	ParentID        string         // Parent session ID (for play command phases)
+	CapturedFiles     *[]string      // If non-nil, collect thoughts/shared/*.md paths from output
+	CapturePattern    *regexp.Regexp // If non-nil, override default file capture regex
+	CapturedSessionID *string        // If non-nil, capture Claude session ID from PTY output into this string
+	ParentID          string         // Parent session ID (for play command phases)
 	Interrupted     *bool          // If non-nil, set to true when the child exits without auto-terminate firing
 }
 
