@@ -26,6 +26,9 @@ import (
 
 var defaultCapturedFileRe = regexp.MustCompile(`(thoughts/shared/\S+\.md)`)
 
+// claudeSessionIDRe matches the Claude session ID in PTY output (e.g. "session_01ABC...")
+var claudeSessionIDRe = regexp.MustCompile(`session_([A-Za-z0-9]{10,})`)
+
 const (
 	// idleThreshold is how long without output before transitioning back to waiting
 	idleThreshold = 1 * time.Second
@@ -355,6 +358,13 @@ func (b *Base) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sessio
 							capturedSeen[m] = true
 							*opts.CapturedFiles = append(*opts.CapturedFiles, m)
 						}
+					}
+				}
+				if opts.CapturedSessionID != nil && *opts.CapturedSessionID == "" && session != nil {
+					if m := claudeSessionIDRe.FindStringSubmatch(string(buf[:n])); len(m) > 1 {
+						sid := m[1]
+						*opts.CapturedSessionID = sid
+						b.db.UpdateClaudeSessionID(session.ID, sid) //nolint:errcheck
 					}
 				}
 			}

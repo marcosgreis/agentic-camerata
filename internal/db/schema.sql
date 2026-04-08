@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- Output tracking
     output_file TEXT,
     playbook_file TEXT,
+    play_state TEXT,
     pid INTEGER,
     deleted_at DATETIME,
     parent_id TEXT
