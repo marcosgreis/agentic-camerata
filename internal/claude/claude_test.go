@@ -43,8 +43,8 @@ func TestGetPromptPrefix(t *testing.T) {
 			wantPrefix: "Analyze and fix the failing test at:",
 		},
 		{
-			name:       "look-and-fix command has instruction prefix",
-			command:    agent.CommandLookAndFix,
+			name:       "fix-local-comments command has instruction prefix",
+			command:    agent.CommandFixLocalComments,
 			wantPrefix: "Take a look at this repo and search for comments tagged with CMT and propose how to solve them. If a class name or filename is provided as a parameter, focus the search on that specific file or class.",
 		},
 		{
@@ -58,19 +58,19 @@ func TestGetPromptPrefix(t *testing.T) {
 			wantPrefix: "",
 		},
 		{
-			name:       "look-and-fix with custom tag",
-			command:    agent.CommandLookAndFix,
+			name:       "fix-local-comments with custom tag",
+			command:    agent.CommandFixLocalComments,
 			commentTag: "TODO",
 			wantPrefix: "Take a look at this repo and search for comments tagged with TODO and propose how to solve them. If a class name or filename is provided as a parameter, focus the search on that specific file or class.",
 		},
 		{
-			name:       "look-and-fix with empty tag defaults to CMT",
-			command:    agent.CommandLookAndFix,
+			name:       "fix-local-comments with empty tag defaults to CMT",
+			command:    agent.CommandFixLocalComments,
 			commentTag: "",
 			wantPrefix: "Take a look at this repo and search for comments tagged with CMT and propose how to solve them. If a class name or filename is provided as a parameter, focus the search on that specific file or class.",
 		},
 		{
-			name:       "non-look-and-fix ignores commentTag",
+			name:       "non-fix-local-comments ignores commentTag",
 			command:    agent.CommandResearch,
 			commentTag: "SOMETHING",
 			wantPrefix: "/research_codebase",
@@ -194,9 +194,9 @@ func TestBuildCommand(t *testing.T) {
 			notWantArgs: []string{"--dangerously-skip-permissions"},
 		},
 		{
-			name: "look-and-fix with custom comment tag",
+			name: "fix-local-comments with custom comment tag",
 			opts: agent.RunOptions{
-				Command:         agent.CommandLookAndFix,
+				Command:         agent.CommandFixLocalComments,
 				WorkflowType:    db.WorkflowFix,
 				TaskDescription: "auth bug",
 				CommentTag:      "FIXME",
@@ -205,9 +205,9 @@ func TestBuildCommand(t *testing.T) {
 			notWantArgs: []string{"comments tagged with CMT"},
 		},
 		{
-			name: "look-and-fix defaults to CMT tag",
+			name: "fix-local-comments defaults to CMT tag",
 			opts: agent.RunOptions{
-				Command:         agent.CommandLookAndFix,
+				Command:         agent.CommandFixLocalComments,
 				WorkflowType:    db.WorkflowFix,
 				TaskDescription: "auth bug",
 			},

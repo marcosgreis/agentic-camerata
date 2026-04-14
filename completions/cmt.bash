@@ -7,9 +7,17 @@ _cmt_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    local commands="new research plan implement review fix-test look-and-fix quick play sessions jump dashboard todo"
-    local global_opts="-d --db -v --verbose -a --autonomous -h --help"
+    local commands="new research plan implement review fix-test fix-local-comments fix-pr-build fix-pr-comments quick play sessions jump dashboard todo"
+    local global_opts="-d --db -v --verbose -a --autonomous -h --help --model --agent"
     local file_opts="-f --files -d --dirs -t --thoughts"
+
+    # Handle global flag value completions before command-specific
+    case "$prev" in
+        --agent)
+            COMPREPLY=($(compgen -W "claude codex amp" -- "$cur"))
+            return 0
+            ;;
+    esac
 
     # Handle command-specific completions
     case "${COMP_WORDS[1]}" in
@@ -109,7 +117,7 @@ _cmt_completions() {
                     ;;
             esac
             ;;
-        look-and-fix)
+        fix-local-comments)
             case "$prev" in
                 -f|--files)
                     COMPREPLY=($(compgen -f -- "$cur"))
@@ -127,20 +135,60 @@ _cmt_completions() {
                     ;;
             esac
             ;;
+        fix-pr-build)
+            case "$prev" in
+                -f|--files)
+                    COMPREPLY=($(compgen -f -- "$cur"))
+                    ;;
+                -d|--dirs)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    ;;
+                *)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "$file_opts" -- "$cur"))
+                    fi
+                    ;;
+            esac
+            ;;
+        fix-pr-comments)
+            case "$prev" in
+                -f|--files)
+                    COMPREPLY=($(compgen -f -- "$cur"))
+                    ;;
+                -d|--dirs)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    ;;
+                *)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "$file_opts" -- "$cur"))
+                    fi
+                    ;;
+            esac
+            ;;
         quick)
             # quick <prompt> - no specific completions
             COMPREPLY=()
             ;;
         play)
-            # play <playbook> - complete with any file or directory
-            if [[ $COMP_CWORD -eq 2 ]]; then
-                COMPREPLY=($(compgen -f -- "$cur"))
-            fi
+            case "$prev" in
+                -r|--resume)
+                    local sessions
+                    sessions=$(cmt sessions 2>/dev/null | tail -n +2 | awk '{print $1}')
+                    COMPREPLY=($(compgen -W "$sessions" -- "$cur"))
+                    ;;
+                *)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-r --resume" -- "$cur"))
+                    else
+                        COMPREPLY=($(compgen -f -- "$cur"))
+                    fi
+                    ;;
+            esac
             ;;
         sessions)
             case "$prev" in
                 -s|--status)
-                    COMPREPLY=($(compgen -W "waiting working completed abandoned" -- "$cur"))
+                    COMPREPLY=($(compgen -W "waiting working completed abandoned killed deleted restored" -- "$cur"))
                     ;;
                 -n|--limit)
                     COMPREPLY=()
@@ -187,7 +235,7 @@ _cmt_completions() {
                 list)
                     case "$prev" in
                         -s|--status)
-                            COMPREPLY=($(compgen -W "todo done all" -- "$cur"))
+                            COMPREPLY=($(compgen -W "todo done deleted all" -- "$cur"))
                             ;;
                         *)
                             if [[ "$cur" == -* ]]; then

@@ -7,15 +7,15 @@ import (
 	"github.com/agentic-camerata/cmt/internal/db"
 )
 
-// LookAndFixCmd starts a session to look at an issue and fix it
-type LookAndFixCmd struct {
+// FixLocalCommentsCmd starts a session to look at an issue and fix it
+type FixLocalCommentsCmd struct {
 	FileFlags
 	CommentTag string `help:"Comment tag to search for" env:"CMT_COMMENT_TAG" optional:""`
 	Issue      string `arg:"" help:"Issue or problem to investigate and fix"`
 }
 
-// Run executes the look-and-fix command
-func (c *LookAndFixCmd) Run(cli *CLI) error {
+// Run executes the fix-local-comments command
+func (c *FixLocalCommentsCmd) Run(cli *CLI) error {
 	files, err := c.FileFlags.ResolveFiles()
 	if err != nil {
 		return err
@@ -29,7 +29,7 @@ func (c *LookAndFixCmd) Run(cli *CLI) error {
 	}
 
 	return ag.Run(context.Background(), agent.RunOptions{
-		Command:         agent.CommandLookAndFix,
+		Command:         agent.CommandFixLocalComments,
 		WorkflowType:    db.WorkflowFix,
 		TaskDescription: issue,
 		Model:           cli.Model,

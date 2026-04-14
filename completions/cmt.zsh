@@ -16,7 +16,9 @@ _cmt() {
         'implement:Start an implementation session'
         'review:Review changes in the working directory'
         'fix-test:Fix a failing test'
-        'look-and-fix:Look at an issue and fix it'
+        'fix-local-comments:Look at an issue and fix it'
+        'fix-pr-build:Fix a PR'\''s CI build'
+        'fix-pr-comments:Address unresolved PR comments'
         'quick:Quick single-response query (uses Sonnet)'
         'play:Run a multi-phase playbook workflow'
         'sessions:List all sessions'
@@ -31,6 +33,8 @@ _cmt() {
         '(-v --verbose)'{-v,--verbose}'[Enable verbose output]'
         '(-a --autonomous)'{-a,--autonomous}'[Enable autonomous mode (skip permission prompts)]'
         '(-h --help)'{-h,--help}'[Show help]'
+        '--model[Override default model]:model:'
+        '--agent[Agent backend (claude, codex, amp)]:agent:(claude codex amp)'
     )
 
     local -a file_opts
@@ -83,21 +87,33 @@ _cmt() {
                         $file_opts \
                         '1:test:'
                     ;;
-                look-and-fix)
+                fix-local-comments)
                     _arguments \
                         $file_opts \
                         '--comment-tag[Comment tag to search for]:tag:' \
                         '1:issue:'
                     ;;
+                fix-pr-build)
+                    _arguments \
+                        $file_opts \
+                        '1:pr_link:'
+                    ;;
+                fix-pr-comments)
+                    _arguments \
+                        $file_opts \
+                        '1:pr_link:'
+                    ;;
                 quick)
                     _arguments '1:prompt:'
                     ;;
                 play)
-                    _arguments '1:playbook:_files'
+                    _arguments \
+                        '(-r --resume)'{-r,--resume}'[Resume an abandoned play session]:session:_cmt_sessions' \
+                        '1:playbook:_files'
                     ;;
                 sessions)
                     _arguments \
-                        '(-s --status)'{-s,--status}'[Filter by status]:status:(waiting working completed abandoned)' \
+                        '(-s --status)'{-s,--status}'[Filter by status]:status:(waiting working completed abandoned killed deleted restored)' \
                         '(-n --limit)'{-n,--limit}'[Limit number of sessions]:limit:'
                     ;;
                 jump)
@@ -147,7 +163,7 @@ _cmt() {
                                     ;;
                                 list)
                                     _arguments \
-                                        '(-s --status)'{-s,--status}'[Filter by status]:status:(todo done all)'
+                                        '(-s --status)'{-s,--status}'[Filter by status]:status:(todo done deleted all)'
                                     ;;
                                 done|undone|rm)
                                     _arguments '1:todo ID:'

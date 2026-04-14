@@ -52,7 +52,7 @@ var phaseMapping = map[string]struct {
 	"implement":    {agent.CommandImplement, db.WorkflowImplement},
 	"new":          {agent.CommandNew, db.WorkflowGeneral},
 	"fix":          {agent.CommandFixTest, db.WorkflowFix},
-	"look-and-fix": {agent.CommandLookAndFix, db.WorkflowFix},
+	"fix-local-comments": {agent.CommandFixLocalComments, db.WorkflowFix},
 	"review":       {agent.CommandReview, db.WorkflowReview},
 }
 

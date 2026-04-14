@@ -12,9 +12,11 @@ type CLI struct {
 	Plan       PlanCmd       `cmd:"" help:"Start a planning session"`
 	Implement  ImplementCmd  `cmd:"" help:"Start an implementation session"`
 	Review     ReviewCmd     `cmd:"" help:"Review changes in the working directory"`
-	FixTest    FixTestCmd    `cmd:"fix-test" help:"Fix a failing test"`
-	LookAndFix LookAndFixCmd `cmd:"look-and-fix" help:"Look at an issue and fix it"`
-	Quick      QuickCmd      `cmd:"" help:"Quick single-response query (uses Sonnet)"`
+	FixTest     FixTestCmd     `cmd:"fix-test" help:"Fix a failing test"`
+	FixLocalComments FixLocalCommentsCmd `cmd:"fix-local-comments" help:"Look at an issue and fix it"`
+	FixPRBuild       FixPRBuildCmd       `cmd:"fix-pr-build" help:"Fix a PR's CI build"`
+	FixPRComments    FixPRCommentsCmd    `cmd:"fix-pr-comments" help:"Address unresolved PR comments"`
+	Quick       QuickCmd       `cmd:"" help:"Quick single-response query (uses Sonnet)"`
 	Play       PlayCmd       `cmd:"" help:"Run a multi-phase playbook workflow"`
 	Sessions   SessionsCmd   `cmd:"" help:"List all sessions"`
 	Jump       JumpCmd       `cmd:"" help:"Jump to a session's tmux location"`

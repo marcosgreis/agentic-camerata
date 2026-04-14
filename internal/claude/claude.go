@@ -44,9 +44,11 @@ var defaultModels = map[agent.CommandType]string{
 	agent.CommandResearch:   "opus",
 	agent.CommandPlan:       "opus",
 	agent.CommandImplement:  "sonnet",
-	agent.CommandFixTest:    "opus",
-	agent.CommandLookAndFix: "opus",
-	agent.CommandQuick:      "haiku",
+	agent.CommandFixTest:         "opus",
+	agent.CommandFixLocalComments: "opus",
+	agent.CommandFixPRBuild:       "opus",
+	agent.CommandFixPRComments:    "opus",
+	agent.CommandQuick:       "haiku",
 	agent.CommandReview:     "opus",
 }
 
@@ -61,6 +63,8 @@ func (r *Runner) DefaultModel(cmd agent.CommandType) string {
 // buildCommand constructs the claude CLI command from the given options.
 func (r *Runner) buildCommand(opts agent.RunOptions) *exec.Cmd {
 	args := []string{}
+	// hardcoded max effort to make sure it respects this option
+	args = append(args, "--effort", "max")
 
 	model := opts.Model
 	if model == "" {

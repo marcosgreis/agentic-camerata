@@ -160,7 +160,7 @@ implement
 ## Fix
 fix
 
-## Look-and-Fix
+## Fix-local-comments
 look and fix
 
 ## Review
@@ -175,7 +175,7 @@ testdata/nested.md
 				{Type: "plan", Content: "plan"},
 				{Type: "implement", Content: "implement"},
 				{Type: "fix", Content: "fix"},
-				{Type: "look-and-fix", Content: "look and fix"},
+				{Type: "fix-local-comments", Content: "look and fix"},
 				{Type: "review", Content: "review changes"},
 				{Type: "play", Content: "testdata/nested.md"},
 			},

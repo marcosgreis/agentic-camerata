@@ -15,9 +15,11 @@ const (
 	CommandResearch   CommandType = "research"
 	CommandPlan       CommandType = "plan"
 	CommandImplement  CommandType = "implement"
-	CommandFixTest    CommandType = "fix-test"
-	CommandLookAndFix CommandType = "look-and-fix"
-	CommandQuick      CommandType = "quick"
+	CommandFixTest         CommandType = "fix-test"
+	CommandFixLocalComments CommandType = "fix-local-comments"
+	CommandFixPRBuild       CommandType = "fix-pr-build"
+	CommandFixPRComments    CommandType = "fix-pr-comments"
+	CommandQuick       CommandType = "quick"
 	CommandReview     CommandType = "review"
 )
 
@@ -30,7 +32,7 @@ type RunOptions struct {
 	Model           string         // Model to use (e.g., "sonnet", "opus")
 	PrintMode       bool           // If true, print response and exit (non-interactive)
 	AutonomousMode  bool           // If true, skip permission prompts
-	CommentTag      string         // Comment tag for look-and-fix (from CMT_COMMENT_TAG env var)
+	CommentTag      string         // Comment tag for fix-local-comments (from CMT_COMMENT_TAG env var)
 	ResumeSessionID string         // If non-empty, pass --resume to agent. "*" means interactive picker
 	SkipTracking    bool           // If true, skip DB session creation and activity monitoring
 	AutoTerminate   bool           // If true, send kill when session goes idle after working

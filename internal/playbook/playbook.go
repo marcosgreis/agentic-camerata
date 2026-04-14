@@ -8,7 +8,7 @@ import (
 
 // Phase represents a single phase in a playbook
 type Phase struct {
-	Type    string   // "research", "plan", "implement", "new", "fix", "look-and-fix"
+	Type    string   // "research", "plan", "implement", "new", "fix", "fix-local-comments"
 	Content string   // task description (body text under heading, metadata stripped)
 	Tag     string   // optional tag for referencing this phase's outputs
 	Uses    []string // optional tags of phases whose outputs to use
@@ -29,7 +29,7 @@ var validPhaseTypes = map[string]string{
 	"implement":    "implement",
 	"new":          "new",
 	"fix":          "fix",
-	"look-and-fix": "look-and-fix",
+	"fix-local-comments": "fix-local-comments",
 	"review":       "review",
 	"exit":         "exit",
 	"play":         "play",
@@ -75,7 +75,7 @@ func ParseContent(content string) (*Playbook, error) {
 
 			phaseType, ok := validPhaseTypes[normalized]
 			if !ok {
-				return nil, fmt.Errorf("unknown phase type: %q (valid: research, plan, implement, new, fix, look-and-fix, review, play, exit)", heading)
+				return nil, fmt.Errorf("unknown phase type: %q (valid: research, plan, implement, new, fix, fix-local-comments, review, play, exit)", heading)
 			}
 
 			currentType = phaseType

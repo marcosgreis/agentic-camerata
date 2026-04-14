@@ -62,7 +62,7 @@ cmt implement path/to/plan.md    # Or specify plan directly
 cmt fix-test "TestUserAuth"
 
 # Investigate and fix issues tagged with CMT comments
-cmt look-and-fix "authentication bug"
+cmt fix-local-comments "authentication bug"
 
 # Quick single-response query (uses Haiku model)
 cmt quick "what does this function do?"
@@ -123,7 +123,7 @@ Each workflow mode injects a system prompt to guide Claude:
 | **research** | `research` | Read, explore, understand. No file changes |
 | **plan** | `plan` | Design approach, identify trade-offs. Get approval first |
 | **implement** | `implement` | Execute a plan file, implement all phases |
-| **fix** | `fix-test`, `look-and-fix` | Analyze and fix failing tests or issues |
+| **fix** | `fix-test`, `fix-local-comments`, `fix-pr-build`, `fix-pr-comments` | Analyze and fix failing tests or issues |
 
 Session statuses: `active`, `completed`, `abandoned`
 
@@ -165,7 +165,9 @@ internal/
     dashboard.go             # TUI dashboard launcher
     quick.go                 # Single-response Haiku query
     fixtest.go               # Fix failing test workflow
-    look_and_fix.go          # Investigate and fix issues
+    fix_local_comments.go    # Investigate and fix issues
+    fixprbuild.go            # Fix PR CI build workflow
+    fixprcomments.go         # Address unresolved PR comments workflow
   claude/
     claude.go                # Session runner, PTY management
     prompts.go               # Workflow prompt prefixes

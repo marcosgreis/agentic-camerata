@@ -9,8 +9,10 @@ cmt new "task"              # General session
 cmt research "topic"        # Read-only exploration
 cmt plan "feature"          # Design before implementing
 cmt implement [plan_file]   # Execute plan (fzf selector if no file)
-cmt fix-test "test"         # Fix a failing test
-cmt look-and-fix "issue"    # Investigate and fix issues
+cmt fix-test "test"              # Fix a failing test
+cmt fix-local-comments "issue"   # Investigate and fix issues
+cmt fix-pr-build <PR_LINK>       # Fix CI build for a PR
+cmt fix-pr-comments <PR_LINK>    # Address unresolved PR comments
 cmt quick "prompt"          # Single-response Sonnet query
 cmt play playbook.md        # Run multi-phase playbook workflow
 cmt jump [id]               # Navigate to session's tmux location
@@ -34,7 +36,9 @@ internal/
     dashboard.go             # TUI dashboard launcher
     quick.go                 # Single-response Sonnet query
     fixtest.go               # Fix failing test workflow
-    look_and_fix.go          # Investigate and fix issues
+    fix_local_comments.go    # Investigate and fix issues
+    fixprbuild.go            # Fix PR CI build workflow
+    fixprcomments.go         # Address unresolved PR comments workflow
     play.go                  # Multi-phase playbook workflow
     fileflags.go             # -f/-d/-t file selection flags shared across commands
   claude/
@@ -120,7 +124,7 @@ Default: `~/.config/cmt/sessions.db` (override: `-d` flag or `CMT_DB` env)
 - Activity monitoring: session transitions between `waiting` (idle >1s) and `working` (output detected) states
 - File selection flags (`-f file`, `-d dir`, `-t`) available on most session commands via `FileFlags`
 - Global flags: `-v` (verbose), `-a` (autonomous mode, skips permission prompts; also `CMT_AUTONOMOUS` env)
-- Comment tag for look-and-fix defaults to `CMT` (override with `CMT_COMMENT_TAG` env)
+- Comment tag for fix-local-comments defaults to `CMT` (override with `CMT_COMMENT_TAG` env)
 
 ## Workflow Types
 
@@ -131,7 +135,9 @@ Default: `~/.config/cmt/sessions.db` (override: `-d` flag or `CMT_DB` env)
 | plan | `plan` | `/create_plan` |
 | implement | `implement` | `/implement_plan implement all phases ignoring any manual verification steps` |
 | fix | `fix-test` | `Analyze and fix the failing test at:` |
-| fix | `look-and-fix` | `Take a look at this repo and search for comments tagged with {tag}...` |
+| fix | `fix-local-comments` | `Take a look at this repo and search for comments tagged with {tag}...` |
+| fix | `fix-pr-build` | `Fix the build of the PR I will share and commit with the message 'Fix' and push` |
+| fix | `fix-pr-comments` | `Read the unresolved comments from the PR and propose how to fix them` |
 | play | `play` | Orchestrates phases from a playbook markdown file (auto-terminates each phase) |
 
 ## Session Statuses
