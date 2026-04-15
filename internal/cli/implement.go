@@ -45,7 +45,7 @@ func (c *ImplementCmd) Run(cli *CLI) error {
 	}
 
 	ctx := context.Background()
-	return RunWithLoop(ctx, c.Interval, c.Limit, func() error {
+	return RunWithLoop(ctx, c.Interval, c.Limit, func(interrupted *bool) error {
 		return ag.Run(ctx, agent.RunOptions{
 			Command:         agent.CommandImplement,
 			WorkflowType:    db.WorkflowImplement,
@@ -53,6 +53,8 @@ func (c *ImplementCmd) Run(cli *CLI) error {
 			Model:           cli.Model,
 			AutonomousMode:  cli.Autonomous,
 			LoopInterval:    c.Interval,
+			AutoTerminate:   c.Interval != "",
+			Interrupted:     interrupted,
 		})
 	})
 }

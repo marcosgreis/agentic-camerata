@@ -16,17 +16,27 @@ type LoopFlags struct {
 // RunWithLoop runs fn once, or repeatedly at the given interval until ctx is cancelled
 // or the iteration limit is reached. interval must be a valid time.Duration string (e.g. "5m").
 // limit == 0 means unlimited iterations.
-func RunWithLoop(ctx context.Context, interval string, limit int, fn func() error) error {
+//
+// fn receives a pointer to an interrupted flag. When looping, callers should pass this as
+// RunOptions.Interrupted so the runner can signal a user-initiated exit (Ctrl+C). If the
+// flag is set after fn returns, the loop stops instead of waiting for the next interval.
+func RunWithLoop(ctx context.Context, interval string, limit int, fn func(interrupted *bool) error) error {
 	if interval == "" {
-		return fn()
+		var notUsed bool
+		return fn(&notUsed)
 	}
 	d, err := time.ParseDuration(interval)
 	if err != nil {
 		return fmt.Errorf("invalid loop interval %q: %w", interval, err)
 	}
+	var interrupted bool
 	for i := 0; limit == 0 || i < limit; i++ {
-		if err := fn(); err != nil {
+		interrupted = false
+		if err := fn(&interrupted); err != nil {
 			return err
+		}
+		if interrupted {
+			return nil
 		}
 		if limit > 0 && i+1 >= limit {
 			break
