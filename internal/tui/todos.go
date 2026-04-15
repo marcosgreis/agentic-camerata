@@ -36,8 +36,9 @@ func cleanMarkup(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// sortedTodos returns todos with TodoStatusTodo first, then TodoStatusDone,
-// sorted by date ascending (nulls last) within each group.
+// sortedTodos returns todos with TodoStatusTodo first, then TodoStatusDone.
+// Pending items are sorted by date ascending (nulls last).
+// Done items are sorted by updated_at descending (most recently completed first).
 func sortedTodos(todos []*db.Todo) []*db.Todo {
 	sorted := make([]*db.Todo, len(todos))
 	copy(sorted, todos)
@@ -47,7 +48,11 @@ func sortedTodos(todos []*db.Todo) []*db.Todo {
 		if iPending != jPending {
 			return iPending
 		}
-		// Within same status group, sort by date ascending (nulls last)
+		// Done items: sort by updated_at descending (most recently completed first)
+		if !iPending {
+			return sorted[i].UpdatedAt.After(sorted[j].UpdatedAt)
+		}
+		// Pending items: sort by date ascending (nulls last)
 		if sorted[i].Date == nil && sorted[j].Date == nil {
 			return false
 		}

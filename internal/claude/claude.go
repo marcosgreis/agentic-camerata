@@ -38,18 +38,20 @@ func (r *Runner) Run(ctx context.Context, opts agent.RunOptions) error {
 	return r.base.Execute(ctx, cmd, opts)
 }
 
+var opusVersioned = "claude-opus-4-5-20251101"
+
 // defaultModels maps command types to the default model for Claude.
 var defaultModels = map[agent.CommandType]string{
-	agent.CommandNew:        "opus",
-	agent.CommandResearch:   "opus",
-	agent.CommandPlan:       "opus",
+	agent.CommandNew:        opusVersioned,
+	agent.CommandResearch:   opusVersioned,
+	agent.CommandPlan:       opusVersioned,
 	agent.CommandImplement:  "sonnet",
-	agent.CommandFixTest:         "opus",
-	agent.CommandFixLocalComments: "opus",
-	agent.CommandFixPRBuild:       "opus",
-	agent.CommandFixPRComments:    "opus",
+	agent.CommandFixTest:         opusVersioned,
+	agent.CommandFixLocalComments: opusVersioned,
+	agent.CommandFixPRBuild:       opusVersioned,
+	agent.CommandFixPRComments:    opusVersioned,
 	agent.CommandQuick:       "haiku",
-	agent.CommandReview:     "opus",
+	agent.CommandReview:     opusVersioned,
 }
 
 // DefaultModel returns the Claude-specific default model for a command type.
@@ -57,7 +59,7 @@ func (r *Runner) DefaultModel(cmd agent.CommandType) string {
 	if m, ok := defaultModels[cmd]; ok {
 		return m
 	}
-	return "opus"
+	return opusVersioned
 }
 
 // buildCommand constructs the claude CLI command from the given options.
