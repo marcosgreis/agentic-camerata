@@ -10,6 +10,7 @@ import (
 // FixPRBuildCmd starts a session focused on fixing a PR's CI build
 type FixPRBuildCmd struct {
 	FileFlags
+	LoopFlags
 	PRLink string `arg:"" help:"Link to the pull request"`
 }
 
@@ -27,11 +28,15 @@ func (c *FixPRBuildCmd) Run(cli *CLI) error {
 		return err
 	}
 
-	return ag.Run(context.Background(), agent.RunOptions{
-		Command:         agent.CommandFixPRBuild,
-		WorkflowType:    db.WorkflowFix,
-		TaskDescription: prLink,
-		Model:           cli.Model,
-		AutonomousMode:  cli.Autonomous,
+	ctx := context.Background()
+	return RunWithLoop(ctx, c.Interval, c.Limit, func() error {
+		return ag.Run(ctx, agent.RunOptions{
+			Command:         agent.CommandFixPRBuild,
+			WorkflowType:    db.WorkflowFix,
+			TaskDescription: prLink,
+			Model:           cli.Model,
+			AutonomousMode:  cli.Autonomous,
+			LoopInterval:    c.Interval,
+		})
 	})
 }

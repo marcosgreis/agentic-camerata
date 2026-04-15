@@ -10,6 +10,7 @@ import (
 // PlanCmd starts a planning-focused agent session
 type PlanCmd struct {
 	FileFlags
+	LoopFlags
 	Task string `arg:"" help:"Task or feature to plan"`
 }
 
@@ -27,11 +28,15 @@ func (c *PlanCmd) Run(cli *CLI) error {
 		return err
 	}
 
-	return ag.Run(context.Background(), agent.RunOptions{
-		Command:         agent.CommandPlan,
-		WorkflowType:    db.WorkflowPlan,
-		TaskDescription: task,
-		Model:           cli.Model,
-		AutonomousMode:  cli.Autonomous,
+	ctx := context.Background()
+	return RunWithLoop(ctx, c.Interval, c.Limit, func() error {
+		return ag.Run(ctx, agent.RunOptions{
+			Command:         agent.CommandPlan,
+			WorkflowType:    db.WorkflowPlan,
+			TaskDescription: task,
+			Model:           cli.Model,
+			AutonomousMode:  cli.Autonomous,
+			LoopInterval:    c.Interval,
+		})
 	})
 }

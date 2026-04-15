@@ -41,6 +41,7 @@ type RunOptions struct {
 	CapturedSessionID *string        // If non-nil, capture Claude session ID from PTY output into this string
 	ParentID          string         // Parent session ID (for play command phases)
 	Interrupted     *bool          // If non-nil, set to true when the child exits without auto-terminate firing
+	LoopInterval    string         // Interval string for looping sessions (e.g. "5m"); stored in DB, empty if not looping
 }
 
 // Agent defines the interface for AI coding agents (Claude, Codex, etc.)

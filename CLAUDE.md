@@ -123,6 +123,7 @@ Default: `~/.config/cmt/sessions.db` (override: `-d` flag or `CMT_DB` env)
 - WAL mode enabled for SQLite concurrency
 - Activity monitoring: session transitions between `waiting` (idle >1s) and `working` (output detected) states
 - File selection flags (`-f file`, `-d dir`, `-t`) available on most session commands via `FileFlags`
+- Loop flags (`--loop <interval>`, `--loop-limit <n>`) available on session commands via `LoopFlags`; each iteration creates its own DB session with `loop_interval` set; dashboard shows "type (interval)" in the workflow column
 - Global flags: `-v` (verbose), `-a` (autonomous mode, skips permission prompts; also `CMT_AUTONOMOUS` env)
 - Comment tag for fix-local-comments defaults to `CMT` (override with `CMT_COMMENT_TAG` env)
 

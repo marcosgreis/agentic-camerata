@@ -10,6 +10,7 @@ import (
 // FixTestCmd starts a session focused on fixing a failing test
 type FixTestCmd struct {
 	FileFlags
+	LoopFlags
 	Test string `arg:"" help:"Test name or description of the failing test"`
 }
 
@@ -27,11 +28,15 @@ func (c *FixTestCmd) Run(cli *CLI) error {
 		return err
 	}
 
-	return ag.Run(context.Background(), agent.RunOptions{
-		Command:         agent.CommandFixTest,
-		WorkflowType:    db.WorkflowFix,
-		TaskDescription: test,
-		Model:           cli.Model,
-		AutonomousMode:  cli.Autonomous,
+	ctx := context.Background()
+	return RunWithLoop(ctx, c.Interval, c.Limit, func() error {
+		return ag.Run(ctx, agent.RunOptions{
+			Command:         agent.CommandFixTest,
+			WorkflowType:    db.WorkflowFix,
+			TaskDescription: test,
+			Model:           cli.Model,
+			AutonomousMode:  cli.Autonomous,
+			LoopInterval:    c.Interval,
+		})
 	})
 }

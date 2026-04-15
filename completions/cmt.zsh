@@ -44,6 +44,12 @@ _cmt() {
         '-t[Open fzf on thoughts/shared/ directory (repeatable)]'
     )
 
+    local -a loop_opts
+    loop_opts=(
+        '--loop[Re-run on a recurring interval (e.g. 5m, 1h)]:interval:(1m 5m 10m 30m 1h 2h)'
+        '--loop-limit[Maximum number of loop iterations (0 = unlimited)]:limit:'
+    )
+
     _arguments -C \
         $global_opts \
         '1:command:->command' \
@@ -58,6 +64,7 @@ _cmt() {
                 new)
                     _arguments \
                         $file_opts \
+                        $loop_opts \
                         '(-r --resume)'{-r,--resume}'[Resume a previous Claude session (interactive picker)]' \
                         '--resume-id[Resume a specific Claude session by ID]:session_id:' \
                         '1:task:'
@@ -65,16 +72,19 @@ _cmt() {
                 research)
                     _arguments \
                         $file_opts \
+                        $loop_opts \
                         '1:topic:'
                     ;;
                 plan)
                     _arguments \
                         $file_opts \
+                        $loop_opts \
                         '1:task:'
                     ;;
                 implement)
                     _arguments \
                         $file_opts \
+                        $loop_opts \
                         '1:plan:_files -g "*.md"'
                     ;;
                 review)
@@ -85,22 +95,26 @@ _cmt() {
                 fix-test)
                     _arguments \
                         $file_opts \
+                        $loop_opts \
                         '1:test:'
                     ;;
                 fix-local-comments)
                     _arguments \
                         $file_opts \
+                        $loop_opts \
                         '--comment-tag[Comment tag to search for]:tag:' \
                         '1:issue:'
                     ;;
                 fix-pr-build)
                     _arguments \
                         $file_opts \
+                        $loop_opts \
                         '1:pr_link:'
                     ;;
                 fix-pr-comments)
                     _arguments \
                         $file_opts \
+                        $loop_opts \
                         '1:pr_link:'
                     ;;
                 quick)

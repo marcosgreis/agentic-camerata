@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     output_file TEXT,
     playbook_file TEXT,
     play_state TEXT,
+    loop_interval TEXT,
     pid INTEGER,
     deleted_at DATETIME,
     parent_id TEXT

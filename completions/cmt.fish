@@ -38,6 +38,10 @@ complete -c cmt -n '__fish_seen_subcommand_from new research plan implement revi
 complete -c cmt -n '__fish_seen_subcommand_from new research plan implement review fix-test fix-local-comments fix-pr-build fix-pr-comments' -s d -d 'Directory to open fzf file selector on (repeatable)' -r -a '(__fish_complete_directories)'
 complete -c cmt -n '__fish_seen_subcommand_from new research plan implement review fix-test fix-local-comments fix-pr-build fix-pr-comments' -s t -d 'Open fzf on thoughts/shared/ directory (repeatable)'
 
+# Loop flags for commands that support them
+complete -c cmt -n '__fish_seen_subcommand_from new research plan implement fix-test fix-local-comments fix-pr-build fix-pr-comments' -l loop -d 'Re-run on a recurring interval (e.g. 5m, 1h)' -r -a '1m 5m 10m 30m 1h 2h'
+complete -c cmt -n '__fish_seen_subcommand_from new research plan implement fix-test fix-local-comments fix-pr-build fix-pr-comments' -l loop-limit -d 'Maximum number of loop iterations (0 = unlimited)' -r
+
 # new command options
 complete -c cmt -n '__fish_seen_subcommand_from new' -s r -l resume -d 'Resume a previous Claude session (interactive picker)'
 complete -c cmt -n '__fish_seen_subcommand_from new' -l resume-id -d 'Resume a specific Claude session by ID' -r

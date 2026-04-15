@@ -10,11 +10,21 @@ _cmt_completions() {
     local commands="new research plan implement review fix-test fix-local-comments fix-pr-build fix-pr-comments quick play sessions jump dashboard todo"
     local global_opts="-d --db -v --verbose -a --autonomous -h --help --model --agent"
     local file_opts="-f --files -d --dirs -t --thoughts"
+    local loop_opts="--loop --loop-limit"
 
     # Handle global flag value completions before command-specific
     case "$prev" in
         --agent)
             COMPREPLY=($(compgen -W "claude codex amp" -- "$cur"))
+            return 0
+            ;;
+        --loop)
+            # Suggest common duration examples
+            COMPREPLY=($(compgen -W "1m 5m 10m 30m 1h 2h" -- "$cur"))
+            return 0
+            ;;
+        --loop-limit)
+            COMPREPLY=()
             return 0
             ;;
     esac
@@ -34,7 +44,7 @@ _cmt_completions() {
                     ;;
                 *)
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$file_opts -r --resume --resume-id" -- "$cur"))
+                        COMPREPLY=($(compgen -W "$file_opts $loop_opts -r --resume --resume-id" -- "$cur"))
                     fi
                     ;;
             esac
@@ -49,7 +59,7 @@ _cmt_completions() {
                     ;;
                 *)
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$file_opts" -- "$cur"))
+                        COMPREPLY=($(compgen -W "$file_opts $loop_opts" -- "$cur"))
                     fi
                     ;;
             esac
@@ -64,7 +74,7 @@ _cmt_completions() {
                     ;;
                 *)
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$file_opts" -- "$cur"))
+                        COMPREPLY=($(compgen -W "$file_opts $loop_opts" -- "$cur"))
                     fi
                     ;;
             esac
@@ -79,7 +89,7 @@ _cmt_completions() {
                     ;;
                 *)
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$file_opts" -- "$cur"))
+                        COMPREPLY=($(compgen -W "$file_opts $loop_opts" -- "$cur"))
                     else
                         # Complete with plan files
                         COMPREPLY=($(compgen -f -X '!*.md' -- "$cur"))
@@ -112,7 +122,7 @@ _cmt_completions() {
                     ;;
                 *)
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$file_opts" -- "$cur"))
+                        COMPREPLY=($(compgen -W "$file_opts $loop_opts" -- "$cur"))
                     fi
                     ;;
             esac
@@ -130,7 +140,7 @@ _cmt_completions() {
                     ;;
                 *)
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$file_opts --comment-tag" -- "$cur"))
+                        COMPREPLY=($(compgen -W "$file_opts $loop_opts --comment-tag" -- "$cur"))
                     fi
                     ;;
             esac
@@ -145,7 +155,7 @@ _cmt_completions() {
                     ;;
                 *)
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$file_opts" -- "$cur"))
+                        COMPREPLY=($(compgen -W "$file_opts $loop_opts" -- "$cur"))
                     fi
                     ;;
             esac
@@ -160,7 +170,7 @@ _cmt_completions() {
                     ;;
                 *)
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$file_opts" -- "$cur"))
+                        COMPREPLY=($(compgen -W "$file_opts $loop_opts" -- "$cur"))
                     fi
                     ;;
             esac

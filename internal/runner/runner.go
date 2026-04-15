@@ -108,6 +108,7 @@ func (b *Base) Execute(ctx context.Context, cmd *exec.Cmd, opts agent.RunOptions
 		TmuxWindow:       tmuxWindow,
 		TmuxPane:         tmuxPane,
 		OutputFile:       outputFile,
+		LoopInterval:     opts.LoopInterval,
 		ParentID:         opts.ParentID,
 	}
 

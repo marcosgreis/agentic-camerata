@@ -694,7 +694,7 @@ func (d *Dashboard) View() string {
 const (
 	colIDWidth       = 10
 	colStatusWidth   = 11
-	colWorkflowWidth = 10
+	colWorkflowWidth = 16
 	colAgeWidth      = 6
 	colPrefixWidth   = 20
 )
@@ -955,6 +955,13 @@ func (d *Dashboard) formatSessionLine(s *db.Session, cols visibleColumns, select
 
 	statusStr := string(s.Status)
 	workflowStr := string(s.WorkflowType)
+	workflowDisplay := workflowStr
+	if s.LoopInterval != "" {
+		workflowDisplay = fmt.Sprintf("%s (%s)", workflowStr, s.LoopInterval)
+	}
+	if len(workflowDisplay) > colWorkflowWidth {
+		workflowDisplay = workflowDisplay[:colWorkflowWidth-1] + "…"
+	}
 	age := formatAge(s.CreatedAt)
 
 	// Truncate prefix to fit column width
@@ -996,9 +1003,9 @@ func (d *Dashboard) formatSessionLine(s *db.Session, cols visibleColumns, select
 	if cols.workflow {
 		var workflow string
 		if inHistory {
-			workflow = WorkflowStyleDim(workflowStr).Render(fmt.Sprintf("%-*s", colWorkflowWidth, workflowStr))
+			workflow = WorkflowStyleDim(workflowStr).Render(fmt.Sprintf("%-*s", colWorkflowWidth, workflowDisplay))
 		} else {
-			workflow = WorkflowStyle(workflowStr).Render(fmt.Sprintf("%-*s", colWorkflowWidth, workflowStr))
+			workflow = WorkflowStyle(workflowStr).Render(fmt.Sprintf("%-*s", colWorkflowWidth, workflowDisplay))
 		}
 		parts = append(parts, workflow)
 	}

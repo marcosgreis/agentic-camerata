@@ -10,6 +10,7 @@ import (
 // NewCmd starts a new general agent session
 type NewCmd struct {
 	FileFlags
+	LoopFlags
 	Resume   bool   `short:"r" help:"Resume a previous Claude session (interactive picker)"`
 	ResumeID string `help:"Resume a specific Claude session by ID" name:"resume-id"`
 	Task     string `arg:"" optional:"" help:"Initial task or prompt for Claude"`
@@ -36,12 +37,16 @@ func (c *NewCmd) Run(cli *CLI) error {
 		resumeID = "*"
 	}
 
-	return ag.Run(context.Background(), agent.RunOptions{
-		Command:         agent.CommandNew,
-		WorkflowType:    db.WorkflowGeneral,
-		TaskDescription: task,
-		Model:           cli.Model,
-		AutonomousMode:  cli.Autonomous,
-		ResumeSessionID: resumeID,
+	ctx := context.Background()
+	return RunWithLoop(ctx, c.Interval, c.Limit, func() error {
+		return ag.Run(ctx, agent.RunOptions{
+			Command:         agent.CommandNew,
+			WorkflowType:    db.WorkflowGeneral,
+			TaskDescription: task,
+			Model:           cli.Model,
+			AutonomousMode:  cli.Autonomous,
+			ResumeSessionID: resumeID,
+			LoopInterval:    c.Interval,
+		})
 	})
 }

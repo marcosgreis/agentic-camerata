@@ -10,6 +10,7 @@ import (
 // FixLocalCommentsCmd starts a session to look at an issue and fix it
 type FixLocalCommentsCmd struct {
 	FileFlags
+	LoopFlags
 	CommentTag string `help:"Comment tag to search for" env:"CMT_COMMENT_TAG" optional:""`
 	Issue      string `arg:"" help:"Issue or problem to investigate and fix"`
 }
@@ -28,12 +29,16 @@ func (c *FixLocalCommentsCmd) Run(cli *CLI) error {
 		return err
 	}
 
-	return ag.Run(context.Background(), agent.RunOptions{
-		Command:         agent.CommandFixLocalComments,
-		WorkflowType:    db.WorkflowFix,
-		TaskDescription: issue,
-		Model:           cli.Model,
-		AutonomousMode:  cli.Autonomous,
-		CommentTag:      c.CommentTag,
+	ctx := context.Background()
+	return RunWithLoop(ctx, c.Interval, c.Limit, func() error {
+		return ag.Run(ctx, agent.RunOptions{
+			Command:         agent.CommandFixLocalComments,
+			WorkflowType:    db.WorkflowFix,
+			TaskDescription: issue,
+			Model:           cli.Model,
+			AutonomousMode:  cli.Autonomous,
+			CommentTag:      c.CommentTag,
+			LoopInterval:    c.Interval,
+		})
 	})
 }
