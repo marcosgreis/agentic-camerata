@@ -13,6 +13,7 @@ import (
 // ImplementCmd starts an implementation-focused agent session
 type ImplementCmd struct {
 	FileFlags
+	LoopFlags
 	Plan string `arg:"" optional:"" help:"Path to plan file (uses fzf selector if not provided)"`
 }
 
@@ -43,11 +44,17 @@ func (c *ImplementCmd) Run(cli *CLI) error {
 		return err
 	}
 
-	return ag.Run(context.Background(), agent.RunOptions{
-		Command:         agent.CommandImplement,
-		WorkflowType:    db.WorkflowImplement,
-		TaskDescription: task,
-		Model:           cli.Model,
-		AutonomousMode:  cli.Autonomous,
+	ctx := context.Background()
+	return RunWithLoop(ctx, c.Interval, c.Limit, func(interrupted *bool) error {
+		return ag.Run(ctx, agent.RunOptions{
+			Command:         agent.CommandImplement,
+			WorkflowType:    db.WorkflowImplement,
+			TaskDescription: task,
+			Model:           cli.Model,
+			AutonomousMode:  cli.Autonomous,
+			LoopInterval:    c.Interval,
+			AutoTerminate:   c.Interval != "",
+			Interrupted:     interrupted,
+		})
 	})
 }

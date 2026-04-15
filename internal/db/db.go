@@ -81,6 +81,9 @@ func Open(path string) (*DB, error) {
 	if err := addColumnIfNotExists(conn, `ALTER TABLE sessions ADD COLUMN play_state TEXT`, "sessions play_state column"); err != nil {
 		return nil, err
 	}
+	if err := addColumnIfNotExists(conn, `ALTER TABLE sessions ADD COLUMN loop_interval TEXT`, "sessions loop_interval column"); err != nil {
+		return nil, err
+	}
 
 	// Create todos table if it doesn't exist (for existing databases)
 	if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS todos (

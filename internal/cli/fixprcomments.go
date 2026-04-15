@@ -10,6 +10,7 @@ import (
 // FixPRCommentsCmd starts a session to address unresolved PR comments
 type FixPRCommentsCmd struct {
 	FileFlags
+	LoopFlags
 	PRLink string `arg:"" help:"Link to the pull request"`
 }
 
@@ -27,11 +28,17 @@ func (c *FixPRCommentsCmd) Run(cli *CLI) error {
 		return err
 	}
 
-	return ag.Run(context.Background(), agent.RunOptions{
-		Command:         agent.CommandFixPRComments,
-		WorkflowType:    db.WorkflowFix,
-		TaskDescription: prLink,
-		Model:           cli.Model,
-		AutonomousMode:  cli.Autonomous,
+	ctx := context.Background()
+	return RunWithLoop(ctx, c.Interval, c.Limit, func(interrupted *bool) error {
+		return ag.Run(ctx, agent.RunOptions{
+			Command:         agent.CommandFixPRComments,
+			WorkflowType:    db.WorkflowFix,
+			TaskDescription: prLink,
+			Model:           cli.Model,
+			AutonomousMode:  cli.Autonomous,
+			LoopInterval:    c.Interval,
+			AutoTerminate:   c.Interval != "",
+			Interrupted:     interrupted,
+		})
 	})
 }

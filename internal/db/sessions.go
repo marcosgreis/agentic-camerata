@@ -49,6 +49,7 @@ type Session struct {
 	OutputFile       string
 	PlaybookFile     string     // Path to saved playbook copy (play sessions only)
 	PlayState        string     // JSON-encoded play state (play sessions only)
+	LoopInterval     string     // Interval for looping sessions (e.g. "5m", "" if not looping)
 	PID              int
 	DeletedAt        *time.Time // nil if not deleted
 	ParentID         string     // ID of parent play session (empty if top-level)
@@ -64,12 +65,12 @@ func (db *DB) CreateSession(s *Session) error {
 	query := `
 		INSERT INTO sessions (
 			id, workflow_type, status, working_directory, task_description, prefix,
-			claude_session_id, tmux_session, tmux_window, tmux_pane, output_file, playbook_file, play_state, pid, parent_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			claude_session_id, tmux_session, tmux_window, tmux_pane, output_file, playbook_file, play_state, loop_interval, pid, parent_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := db.conn.Exec(query,
 		s.ID, s.WorkflowType, s.Status, s.WorkingDirectory, s.TaskDescription, s.Prefix,
-		s.ClaudeSessionID, s.TmuxSession, s.TmuxWindow, s.TmuxPane, s.OutputFile, s.PlaybookFile, s.PlayState, s.PID, s.ParentID,
+		s.ClaudeSessionID, s.TmuxSession, s.TmuxWindow, s.TmuxPane, s.OutputFile, s.PlaybookFile, s.PlayState, s.LoopInterval, s.PID, s.ParentID,
 	)
 	if err != nil {
 		return fmt.Errorf("insert session: %w", err)
@@ -82,7 +83,7 @@ func (db *DB) GetSession(id string) (*Session, error) {
 	query := `
 		SELECT id, created_at, updated_at, workflow_type, status, working_directory,
 		       task_description, prefix, claude_session_id, tmux_session, tmux_window, tmux_pane,
-		       output_file, playbook_file, play_state, pid, deleted_at, parent_id
+		       output_file, playbook_file, play_state, loop_interval, pid, deleted_at, parent_id
 		FROM sessions WHERE id = ?
 	`
 	row := db.conn.QueryRow(query, id)
@@ -94,7 +95,7 @@ func (db *DB) GetLastSession() (*Session, error) {
 	query := `
 		SELECT id, created_at, updated_at, workflow_type, status, working_directory,
 		       task_description, prefix, claude_session_id, tmux_session, tmux_window, tmux_pane,
-		       output_file, playbook_file, play_state, pid, deleted_at, parent_id
+		       output_file, playbook_file, play_state, loop_interval, pid, deleted_at, parent_id
 		FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1
 	`
 	row := db.conn.QueryRow(query)
@@ -111,7 +112,7 @@ func (db *DB) ListSessions(status SessionStatus) ([]*Session, error) {
 		query = `
 			SELECT id, created_at, updated_at, workflow_type, status, working_directory,
 			       task_description, prefix, claude_session_id, tmux_session, tmux_window, tmux_pane,
-			       output_file, playbook_file, play_state, pid, deleted_at, parent_id
+			       output_file, playbook_file, play_state, loop_interval, pid, deleted_at, parent_id
 			FROM sessions WHERE status = ? ORDER BY created_at DESC, rowid DESC
 		`
 		args = append(args, status)
@@ -119,7 +120,7 @@ func (db *DB) ListSessions(status SessionStatus) ([]*Session, error) {
 		query = `
 			SELECT id, created_at, updated_at, workflow_type, status, working_directory,
 			       task_description, prefix, claude_session_id, tmux_session, tmux_window, tmux_pane,
-			       output_file, playbook_file, play_state, pid, deleted_at, parent_id
+			       output_file, playbook_file, play_state, loop_interval, pid, deleted_at, parent_id
 			FROM sessions WHERE status != 'deleted' ORDER BY created_at DESC, rowid DESC
 		`
 	}
@@ -159,14 +160,15 @@ func (db *DB) UpdateSession(s *Session) error {
 			output_file = ?,
 			playbook_file = ?,
 			play_state = ?,
+			loop_interval = ?,
 			pid = ?,
 			parent_id = ?
 		WHERE id = ?
 	`
 	_, err := db.conn.Exec(query,
 		s.WorkflowType, s.Status, s.WorkingDirectory, s.TaskDescription, s.Prefix,
-		s.ClaudeSessionID, s.TmuxSession, s.TmuxWindow, s.TmuxPane, s.OutputFile, s.PlaybookFile, s.PlayState, s.PID,
-		s.ParentID, s.ID,
+		s.ClaudeSessionID, s.TmuxSession, s.TmuxWindow, s.TmuxPane, s.OutputFile, s.PlaybookFile, s.PlayState, s.LoopInterval,
+		s.PID, s.ParentID, s.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update session: %w", err)
@@ -209,7 +211,7 @@ func (db *DB) ListAbandonedPlaySessions() ([]*Session, error) {
 	query := `
 		SELECT id, created_at, updated_at, workflow_type, status, working_directory,
 		       task_description, prefix, claude_session_id, tmux_session, tmux_window, tmux_pane,
-		       output_file, playbook_file, play_state, pid, deleted_at, parent_id
+		       output_file, playbook_file, play_state, loop_interval, pid, deleted_at, parent_id
 		FROM sessions
 		WHERE workflow_type = 'play' AND status = 'abandoned'
 		AND (parent_id IS NULL OR parent_id = '')
@@ -260,14 +262,14 @@ type scanner interface {
 // scanSessionFrom scans a session from any scanner (Row or Rows).
 func scanSessionFrom(s scanner) (*Session, error) {
 	var sess Session
-	var taskDesc, prefix, claudeID, outputFile, playbookFile, playState, parentID sql.NullString
+	var taskDesc, prefix, claudeID, outputFile, playbookFile, playState, loopInterval, parentID sql.NullString
 	var pid sql.NullInt64
 	var deletedAt sql.NullTime
 
 	err := s.Scan(
 		&sess.ID, &sess.CreatedAt, &sess.UpdatedAt, &sess.WorkflowType, &sess.Status, &sess.WorkingDirectory,
 		&taskDesc, &prefix, &claudeID, &sess.TmuxSession, &sess.TmuxWindow, &sess.TmuxPane,
-		&outputFile, &playbookFile, &playState, &pid, &deletedAt, &parentID,
+		&outputFile, &playbookFile, &playState, &loopInterval, &pid, &deletedAt, &parentID,
 	)
 	if err != nil {
 		return nil, err
@@ -279,6 +281,7 @@ func scanSessionFrom(s scanner) (*Session, error) {
 	sess.OutputFile = outputFile.String
 	sess.PlaybookFile = playbookFile.String
 	sess.PlayState = playState.String
+	sess.LoopInterval = loopInterval.String
 	sess.PID = int(pid.Int64)
 	if deletedAt.Valid {
 		sess.DeletedAt = &deletedAt.Time
@@ -314,7 +317,7 @@ func (db *DB) ListDeletedSessions() ([]*Session, error) {
 	query := `
 		SELECT id, created_at, updated_at, workflow_type, status, working_directory,
 		       task_description, prefix, claude_session_id, tmux_session, tmux_window, tmux_pane,
-		       output_file, playbook_file, play_state, pid, deleted_at, parent_id
+		       output_file, playbook_file, play_state, loop_interval, pid, deleted_at, parent_id
 		FROM sessions WHERE status = 'deleted' ORDER BY deleted_at DESC, rowid DESC
 	`
 
