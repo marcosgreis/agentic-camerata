@@ -70,12 +70,13 @@ complete -c cmt -n '__fish_seen_subcommand_from dashboard' -l todos -d 'Open dir
 complete -c cmt -n '__fish_seen_subcommand_from dashboard' -l debug -d 'Render dashboard to stdout and exit (for debugging)'
 
 # todo subcommands
-complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list done undone update rm' -a add -d 'Add a new todo'
-complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list done undone update rm' -a list -d 'List todos'
-complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list done undone update rm' -a done -d 'Mark a todo as done'
-complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list done undone update rm' -a undone -d 'Mark a todo as not done'
-complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list done undone update rm' -a update -d 'Update a todo'
-complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list done undone update rm' -a rm -d 'Remove a todo'
+complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list search done undone update rm' -a add -d 'Add a new todo'
+complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list search done undone update rm' -a list -d 'List todos'
+complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list search done undone update rm' -a search -d 'Search todos with filters'
+complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list search done undone update rm' -a done -d 'Mark a todo as done'
+complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list search done undone update rm' -a undone -d 'Mark a todo as not done'
+complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list search done undone update rm' -a update -d 'Update a todo'
+complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list search done undone update rm' -a rm -d 'Remove a todo'
 
 # todo add options
 complete -c cmt -n '__fish_seen_subcommand_from add' -s s -l source -d 'Source (e.g. slack, github, email)' -r
@@ -88,6 +89,15 @@ complete -c cmt -n '__fish_seen_subcommand_from add' -s m -l full-message -d 'Fu
 
 # todo list options
 complete -c cmt -n '__fish_seen_subcommand_from list' -s s -l status -d 'Filter by status' -r -a 'todo done deleted all'
+
+# todo search options
+complete -c cmt -n '__fish_seen_subcommand_from search' -l id -d 'Filter by ID' -r
+complete -c cmt -n '__fish_seen_subcommand_from search' -s k -l key -d 'Filter by idempotency key' -r
+complete -c cmt -n '__fish_seen_subcommand_from search' -s s -l status -d 'Filter by status' -r -a 'todo done'
+complete -c cmt -n '__fish_seen_subcommand_from search' -s u -l url -d 'Filter by URL' -r
+complete -c cmt -n '__fish_seen_subcommand_from search' -s f -l sender -d 'Filter by sender' -r
+complete -c cmt -n '__fish_seen_subcommand_from search' -l source -d 'Filter by source' -r
+complete -c cmt -n '__fish_seen_subcommand_from search' -s d -l include-deleted -d 'Include soft-deleted todos'
 
 # todo update options
 complete -c cmt -n '__fish_seen_subcommand_from update' -s S -l summary -d 'New summary' -r

@@ -125,6 +125,75 @@ func (db *DB) ListTodos(status TodoStatus) ([]*Todo, error) {
 	return todos, rows.Err()
 }
 
+// TodoFilter holds optional search criteria for todos.
+// All non-nil fields are combined with AND logic.
+type TodoFilter struct {
+	ID             *string
+	IdempotencyKey *string
+	Status         *TodoStatus
+	URL            *string
+	Sender         *string
+	Source         *string
+	IncludeDeleted bool
+}
+
+// SearchTodos retrieves todos matching the filter criteria.
+// All non-nil filter fields are combined with AND.
+func (db *DB) SearchTodos(f TodoFilter) ([]*Todo, error) {
+	query := `
+		SELECT id, created_at, updated_at, status, summary, date, source, url, channel, sender, idempotency_key, full_message, deleted_at
+		FROM todos WHERE 1=1
+	`
+	var args []interface{}
+
+	if !f.IncludeDeleted {
+		query += " AND deleted_at IS NULL"
+	}
+	if f.ID != nil {
+		query += " AND id = ?"
+		args = append(args, *f.ID)
+	}
+	if f.IdempotencyKey != nil {
+		query += " AND idempotency_key = ?"
+		args = append(args, *f.IdempotencyKey)
+	}
+	if f.Status != nil {
+		query += " AND status = ?"
+		args = append(args, *f.Status)
+	}
+	if f.URL != nil {
+		query += " AND url = ?"
+		args = append(args, *f.URL)
+	}
+	if f.Sender != nil {
+		query += " AND sender = ?"
+		args = append(args, *f.Sender)
+	}
+	if f.Source != nil {
+		query += " AND source = ?"
+		args = append(args, *f.Source)
+	}
+
+	query += " ORDER BY created_at DESC"
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("search todos: %w", err)
+	}
+	defer rows.Close()
+
+	var todos []*Todo
+	for rows.Next() {
+		t, err := scanTodoRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		todos = append(todos, t)
+	}
+
+	return todos, rows.Err()
+}
+
 // UpdateTodo updates all mutable fields of a todo
 func (db *DB) UpdateTodo(t *Todo) error {
 	query := `

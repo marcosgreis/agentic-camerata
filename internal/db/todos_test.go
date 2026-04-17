@@ -283,6 +283,201 @@ func TestIdempotencyKey(t *testing.T) {
 	})
 }
 
+func TestSearchTodos(t *testing.T) {
+	t.Run("search by ID", func(t *testing.T) {
+		db := openTestDB(t)
+		todo := &Todo{ID: "srch0001", Status: TodoStatusTodo, Summary: "Find me"}
+		if err := db.CreateTodo(todo); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+
+		id := "srch0001"
+		results, err := db.SearchTodos(TodoFilter{ID: &id})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		if len(results) != 1 || results[0].ID != id {
+			t.Errorf("SearchTodos(ID) = %v, want 1 result with ID %q", results, id)
+		}
+	})
+
+	t.Run("search by idempotency key", func(t *testing.T) {
+		db := openTestDB(t)
+		key := "unique-key-123"
+		todo := &Todo{ID: "srch0002", Status: TodoStatusTodo, Summary: "Keyed", IdempotencyKey: &key}
+		if err := db.CreateTodo(todo); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+
+		results, err := db.SearchTodos(TodoFilter{IdempotencyKey: &key})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		if len(results) != 1 {
+			t.Errorf("SearchTodos(IdempotencyKey) = %d results, want 1", len(results))
+		}
+	})
+
+	t.Run("search by sender", func(t *testing.T) {
+		db := openTestDB(t)
+		sender := "alice"
+		todo := &Todo{ID: "srch0003", Status: TodoStatusTodo, Summary: "From Alice", Sender: &sender}
+		if err := db.CreateTodo(todo); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+		bob := "bob"
+		todo2 := &Todo{ID: "srch0004", Status: TodoStatusTodo, Summary: "From Bob", Sender: &bob}
+		if err := db.CreateTodo(todo2); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+
+		results, err := db.SearchTodos(TodoFilter{Sender: &sender})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		if len(results) != 1 || *results[0].Sender != sender {
+			t.Errorf("SearchTodos(Sender) = %v, want 1 result from %q", results, sender)
+		}
+	})
+
+	t.Run("search by source", func(t *testing.T) {
+		db := openTestDB(t)
+		source := "slack"
+		todo := &Todo{ID: "srch0005", Status: TodoStatusTodo, Summary: "From Slack", Source: &source}
+		if err := db.CreateTodo(todo); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+
+		results, err := db.SearchTodos(TodoFilter{Source: &source})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		if len(results) != 1 {
+			t.Errorf("SearchTodos(Source) = %d results, want 1", len(results))
+		}
+	})
+
+	t.Run("search by URL", func(t *testing.T) {
+		db := openTestDB(t)
+		url := "https://example.com/issue/123"
+		todo := &Todo{ID: "srch0006", Status: TodoStatusTodo, Summary: "With URL", URL: &url}
+		if err := db.CreateTodo(todo); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+
+		results, err := db.SearchTodos(TodoFilter{URL: &url})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		if len(results) != 1 {
+			t.Errorf("SearchTodos(URL) = %d results, want 1", len(results))
+		}
+	})
+
+	t.Run("search by status", func(t *testing.T) {
+		db := openTestDB(t)
+		todo1 := &Todo{ID: "srch0007", Status: TodoStatusTodo, Summary: "Pending"}
+		todo2 := &Todo{ID: "srch0008", Status: TodoStatusDone, Summary: "Completed"}
+		if err := db.CreateTodo(todo1); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+		if err := db.CreateTodo(todo2); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+
+		status := TodoStatusDone
+		results, err := db.SearchTodos(TodoFilter{Status: &status})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		if len(results) != 1 || results[0].Status != TodoStatusDone {
+			t.Errorf("SearchTodos(Status=done) = %v, want 1 done result", results)
+		}
+	})
+
+	t.Run("multiple filters combined with AND", func(t *testing.T) {
+		db := openTestDB(t)
+		source := "github"
+		sender := "alice"
+		todo1 := &Todo{ID: "srch0009", Status: TodoStatusTodo, Summary: "Match", Source: &source, Sender: &sender}
+		todo2 := &Todo{ID: "srch0010", Status: TodoStatusTodo, Summary: "No match", Source: &source, Sender: strp("bob")}
+		if err := db.CreateTodo(todo1); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+		if err := db.CreateTodo(todo2); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+
+		results, err := db.SearchTodos(TodoFilter{Source: &source, Sender: &sender})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		if len(results) != 1 || results[0].ID != "srch0009" {
+			t.Errorf("SearchTodos(Source+Sender) = %v, want 1 matching result", results)
+		}
+	})
+
+	t.Run("excludes deleted by default", func(t *testing.T) {
+		db := openTestDB(t)
+		todo := &Todo{ID: "srch0011", Status: TodoStatusTodo, Summary: "Will delete"}
+		if err := db.CreateTodo(todo); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+		if err := db.DeleteTodo(todo.ID); err != nil {
+			t.Fatalf("DeleteTodo() error = %v", err)
+		}
+
+		id := "srch0011"
+		results, err := db.SearchTodos(TodoFilter{ID: &id})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("SearchTodos() = %d results, want 0 (deleted excluded)", len(results))
+		}
+	})
+
+	t.Run("includes deleted when IncludeDeleted true", func(t *testing.T) {
+		db := openTestDB(t)
+		todo := &Todo{ID: "srch0012", Status: TodoStatusTodo, Summary: "Deleted but found"}
+		if err := db.CreateTodo(todo); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+		if err := db.DeleteTodo(todo.ID); err != nil {
+			t.Fatalf("DeleteTodo() error = %v", err)
+		}
+
+		id := "srch0012"
+		results, err := db.SearchTodos(TodoFilter{ID: &id, IncludeDeleted: true})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		if len(results) != 1 {
+			t.Errorf("SearchTodos(IncludeDeleted) = %d results, want 1", len(results))
+		}
+	})
+
+	t.Run("empty filter returns all non-deleted", func(t *testing.T) {
+		db := openTestDB(t)
+		todo1 := &Todo{ID: "srch0013", Status: TodoStatusTodo, Summary: "One"}
+		todo2 := &Todo{ID: "srch0014", Status: TodoStatusDone, Summary: "Two"}
+		if err := db.CreateTodo(todo1); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+		if err := db.CreateTodo(todo2); err != nil {
+			t.Fatalf("CreateTodo() error = %v", err)
+		}
+
+		results, err := db.SearchTodos(TodoFilter{})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		if len(results) != 2 {
+			t.Errorf("SearchTodos(empty) = %d results, want 2", len(results))
+		}
+	})
+}
+
 func TestListTodos(t *testing.T) {
 	t.Run("list all todos", func(t *testing.T) {
 		db := openTestDB(t)

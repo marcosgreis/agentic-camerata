@@ -224,7 +224,7 @@ _cmt_completions() {
             fi
             ;;
         todo)
-            local todo_commands="add list done undone update rm"
+            local todo_commands="add list search done undone update rm"
             case "${COMP_WORDS[2]}" in
                 add)
                     case "$prev" in
@@ -250,6 +250,23 @@ _cmt_completions() {
                         *)
                             if [[ "$cur" == -* ]]; then
                                 COMPREPLY=($(compgen -W "-s --status" -- "$cur"))
+                            fi
+                            ;;
+                    esac
+                    ;;
+                search)
+                    case "$prev" in
+                        --id) COMPREPLY=() ;;
+                        -k|--key) COMPREPLY=() ;;
+                        -s|--status)
+                            COMPREPLY=($(compgen -W "todo done" -- "$cur"))
+                            ;;
+                        -u|--url) COMPREPLY=() ;;
+                        -f|--sender) COMPREPLY=() ;;
+                        --source) COMPREPLY=() ;;
+                        *)
+                            if [[ "$cur" == -* ]]; then
+                                COMPREPLY=($(compgen -W "--id -k --key -s --status -u --url -f --sender --source -d --include-deleted" -- "$cur"))
                             fi
                             ;;
                     esac

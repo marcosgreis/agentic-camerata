@@ -150,6 +150,7 @@ _cmt() {
                     todo_commands=(
                         'add:Add a new todo'
                         'list:List todos'
+                        'search:Search todos with filters'
                         'done:Mark a todo as done'
                         'undone:Mark a todo as not done'
                         'update:Update a todo'
@@ -178,6 +179,16 @@ _cmt() {
                                 list)
                                     _arguments \
                                         '(-s --status)'{-s,--status}'[Filter by status]:status:(todo done deleted all)'
+                                    ;;
+                                search)
+                                    _arguments \
+                                        '--id[Filter by ID]:id:' \
+                                        '(-k --key)'{-k,--key}'[Filter by idempotency key]:key:' \
+                                        '(-s --status)'{-s,--status}'[Filter by status]:status:(todo done)' \
+                                        '(-u --url)'{-u,--url}'[Filter by URL]:url:' \
+                                        '(-f --sender)'{-f,--sender}'[Filter by sender]:sender:' \
+                                        '--source[Filter by source]:source:' \
+                                        '(-d --include-deleted)'{-d,--include-deleted}'[Include soft-deleted todos]'
                                     ;;
                                 done|undone|rm)
                                     _arguments '1:todo ID:'

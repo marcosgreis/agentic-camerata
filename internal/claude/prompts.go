@@ -14,7 +14,7 @@ var promptPrefixes = map[agent.CommandType]string{
 	agent.CommandImplement:  "/implement_plan implement all phases ignoring any manual verification steps",
 	agent.CommandFixTest:         "Analyze and fix the failing test at:",
 	agent.CommandFixLocalComments: "Take a look at this repo and search for comments tagged with %s and propose how to solve them. If a class name or filename is provided as a parameter, focus the search on that specific file or class.",
-	agent.CommandFixPRBuild:       "Fix the build of the PR I will share and commit with the message 'Fix' and push",
+	agent.CommandFixPRBuild:       "Fix the build of the PR I will share and commit with the message 'Fix' and push. Do nothing if the build is not failing.",
 	agent.CommandFixPRComments:    "Read the unresolved comments from the PR and propose how to fix them",
 	agent.CommandQuick:       "",
 	agent.CommandReview:     "/review_code",

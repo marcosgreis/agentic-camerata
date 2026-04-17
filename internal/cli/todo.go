@@ -1,9 +1,9 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
-	"text/tabwriter"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,10 +15,63 @@ import (
 type TodoCmd struct {
 	Add    TodoAddCmd    `cmd:"" help:"Add a new todo"`
 	List   TodoListCmd   `cmd:"" help:"List todos"`
+	Search TodoSearchCmd `cmd:"" help:"Search todos with filters"`
 	Done   TodoDoneCmd   `cmd:"" help:"Mark a todo as done"`
 	Undone TodoUndoneCmd `cmd:"" help:"Mark a todo as not done"`
 	Update TodoUpdateCmd `cmd:"" help:"Update a todo"`
 	Rm     TodoRmCmd     `cmd:"rm" help:"Remove a todo"`
+}
+
+// todoJSON is the JSON representation of a todo with all fields
+type todoJSON struct {
+	ID             string  `json:"id"`
+	CreatedAt      string  `json:"created_at"`
+	UpdatedAt      string  `json:"updated_at"`
+	Status         string  `json:"status"`
+	Summary        string  `json:"summary"`
+	Date           *string `json:"date,omitempty"`
+	Source         *string `json:"source,omitempty"`
+	URL            *string `json:"url,omitempty"`
+	Channel        *string `json:"channel,omitempty"`
+	Sender         *string `json:"sender,omitempty"`
+	IdempotencyKey *string `json:"idempotency_key,omitempty"`
+	FullMessage    *string `json:"full_message,omitempty"`
+	DeletedAt      *string `json:"deleted_at,omitempty"`
+}
+
+func todoToJSON(t *db.Todo) todoJSON {
+	j := todoJSON{
+		ID:             t.ID,
+		CreatedAt:      t.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:      t.UpdatedAt.Format(time.RFC3339),
+		Status:         string(t.Status),
+		Summary:        t.Summary,
+		Source:         t.Source,
+		URL:            t.URL,
+		Channel:        t.Channel,
+		Sender:         t.Sender,
+		IdempotencyKey: t.IdempotencyKey,
+		FullMessage:    t.FullMessage,
+	}
+	if t.Date != nil {
+		s := t.Date.Format(time.RFC3339)
+		j.Date = &s
+	}
+	if t.DeletedAt != nil {
+		s := t.DeletedAt.Format(time.RFC3339)
+		j.DeletedAt = &s
+	}
+	return j
+}
+
+func printTodosJSON(todos []*db.Todo) error {
+	out := make([]todoJSON, len(todos))
+	for i, t := range todos {
+		out[i] = todoToJSON(t)
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(out)
 }
 
 // TodoAddCmd adds a new todo
@@ -99,28 +152,59 @@ func (c *TodoListCmd) Run(cli *CLI) error {
 		return fmt.Errorf("list todos: %w", err)
 	}
 
-	if len(todos) == 0 {
-		fmt.Println("No todos found.")
-		return nil
+	return printTodosJSON(todos)
+}
+
+// TodoSearchCmd searches todos with filters
+type TodoSearchCmd struct {
+	ID             string `help:"Filter by ID" optional:""`
+	Key            string `short:"k" help:"Filter by idempotency key" optional:""`
+	Status         string `short:"s" help:"Filter by status: todo, done" optional:""`
+	URL            string `short:"u" help:"Filter by URL" optional:""`
+	Sender         string `short:"f" help:"Filter by sender" optional:""`
+	Source         string `help:"Filter by source" optional:""`
+	IncludeDeleted bool   `short:"d" help:"Include soft-deleted todos" optional:""`
+}
+
+func (c *TodoSearchCmd) Run(cli *CLI) error {
+	filter := db.TodoFilter{
+		IncludeDeleted: c.IncludeDeleted,
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tSTATUS\tDATE\tSOURCE\tSUMMARY")
-
-	for _, t := range todos {
-		dateStr := "—"
-		if t.Date != nil {
-			dateStr = t.Date.Format("2006-01-02")
+	if c.ID != "" {
+		filter.ID = &c.ID
+	}
+	if c.Key != "" {
+		filter.IdempotencyKey = &c.Key
+	}
+	if c.Status != "" {
+		switch c.Status {
+		case "todo":
+			s := db.TodoStatusTodo
+			filter.Status = &s
+		case "done":
+			s := db.TodoStatusDone
+			filter.Status = &s
+		default:
+			return fmt.Errorf("invalid status %q: must be todo or done", c.Status)
 		}
-		sourceStr := "—"
-		if t.Source != nil {
-			sourceStr = *t.Source
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			t.ID, t.Status, dateStr, sourceStr, t.Summary)
+	}
+	if c.URL != "" {
+		filter.URL = &c.URL
+	}
+	if c.Sender != "" {
+		filter.Sender = &c.Sender
+	}
+	if c.Source != "" {
+		filter.Source = &c.Source
 	}
 
-	return w.Flush()
+	todos, err := cli.Database().SearchTodos(filter)
+	if err != nil {
+		return fmt.Errorf("search todos: %w", err)
+	}
+
+	return printTodosJSON(todos)
 }
 
 // TodoDoneCmd marks a todo as done
