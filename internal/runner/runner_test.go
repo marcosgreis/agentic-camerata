@@ -8,6 +8,25 @@ import (
 	"github.com/agentic-camerata/cmt/internal/db"
 )
 
+func TestFormatInitialInput(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "single line", input: "fix the bug", want: "fix the bug\r"},
+		{name: "multiline normalizes carriage returns", input: "line 1\r\nline 2\rline 3\nline 4", want: "line 1\nline 2\nline 3\nline 4\r"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := string(formatInitialInput(tt.input)); got != tt.want {
+				t.Fatalf("formatInitialInput(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestActivityMonitor(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")

@@ -10,88 +10,6 @@ import (
 	"github.com/agentic-camerata/cmt/internal/db"
 )
 
-func TestGetPromptPrefix(t *testing.T) {
-	tests := []struct {
-		name       string
-		command    agent.CommandType
-		commentTag string
-		wantPrefix string
-	}{
-		{
-			name:       "new command has no prefix",
-			command:    agent.CommandNew,
-			wantPrefix: "",
-		},
-		{
-			name:       "research command has skill prefix",
-			command:    agent.CommandResearch,
-			wantPrefix: "/research_codebase",
-		},
-		{
-			name:       "plan command has skill prefix",
-			command:    agent.CommandPlan,
-			wantPrefix: "/create_plan",
-		},
-		{
-			name:       "implement command has skill prefix",
-			command:    agent.CommandImplement,
-			wantPrefix: "/implement_plan implement all phases ignoring any manual verification steps",
-		},
-		{
-			name:       "fix-test command has instruction prefix",
-			command:    agent.CommandFixTest,
-			wantPrefix: "Analyze and fix the failing test at:",
-		},
-		{
-			name:       "fix-local-comments command has instruction prefix",
-			command:    agent.CommandFixLocalComments,
-			wantPrefix: "Take a look at this repo and search for comments tagged with CMT and propose how to solve them. If a class name or filename is provided as a parameter, focus the search on that specific file or class.",
-		},
-		{
-			name:       "quick command has no prefix",
-			command:    agent.CommandQuick,
-			wantPrefix: "",
-		},
-		{
-			name:       "unknown command has no prefix",
-			command:    agent.CommandType("unknown"),
-			wantPrefix: "",
-		},
-		{
-			name:       "fix-local-comments with custom tag",
-			command:    agent.CommandFixLocalComments,
-			commentTag: "TODO",
-			wantPrefix: "Take a look at this repo and search for comments tagged with TODO and propose how to solve them. If a class name or filename is provided as a parameter, focus the search on that specific file or class.",
-		},
-		{
-			name:       "fix-local-comments with empty tag defaults to CMT",
-			command:    agent.CommandFixLocalComments,
-			commentTag: "",
-			wantPrefix: "Take a look at this repo and search for comments tagged with CMT and propose how to solve them. If a class name or filename is provided as a parameter, focus the search on that specific file or class.",
-		},
-		{
-			name:       "non-fix-local-comments ignores commentTag",
-			command:    agent.CommandResearch,
-			commentTag: "SOMETHING",
-			wantPrefix: "/research_codebase",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := GetPromptPrefix(tt.command, tt.commentTag)
-			if got != tt.wantPrefix {
-				t.Errorf("GetPromptPrefix() = %q, want %q", got, tt.wantPrefix)
-			}
-		})
-	}
-}
-
-// TODO: Add prompt content tests when prompts are implemented
-// func TestResearchPromptContent(t *testing.T) { ... }
-// func TestPlanPromptContent(t *testing.T) { ... }
-// func TestImplementPromptContent(t *testing.T) { ... }
-
 func TestNewRunner(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
@@ -201,8 +119,7 @@ func TestBuildCommand(t *testing.T) {
 				TaskDescription: "auth bug",
 				CommentTag:      "FIXME",
 			},
-			wantArgs:    []string{"comments tagged with FIXME"},
-			notWantArgs: []string{"comments tagged with CMT"},
+			wantArgs: []string{"comments tagged with FIXME", "auth bug"},
 		},
 		{
 			name: "fix-local-comments defaults to CMT tag",
@@ -211,7 +128,7 @@ func TestBuildCommand(t *testing.T) {
 				WorkflowType:    db.WorkflowFix,
 				TaskDescription: "auth bug",
 			},
-			wantArgs: []string{"comments tagged with CMT"},
+			wantArgs: []string{"comments tagged with CMT", "auth bug"},
 		},
 		{
 			name: "resume interactive picker",
@@ -272,4 +189,3 @@ func TestBuildCommand(t *testing.T) {
 		})
 	}
 }
-

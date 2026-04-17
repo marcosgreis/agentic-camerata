@@ -57,8 +57,9 @@ func (r *Runner) buildCommand(opts agent.RunOptions) *exec.Cmd {
 		args = append(args, "-q")
 	}
 
-	if opts.TaskDescription != "" {
-		args = append(args, opts.TaskDescription)
+	taskDescription := agent.ApplyPromptPrefix(opts.Command, opts.TaskDescription, opts.CommentTag)
+	if taskDescription != "" {
+		args = append(args, taskDescription)
 	}
 
 	return exec.Command("codex", args...)

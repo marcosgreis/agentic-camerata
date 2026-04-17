@@ -4,6 +4,7 @@ package amp
 import (
 	"context"
 	"os/exec"
+	"time"
 
 	"github.com/agentic-camerata/cmt/internal/agent"
 	"github.com/agentic-camerata/cmt/internal/db"
@@ -14,6 +15,8 @@ import (
 type Runner struct {
 	base *runner.Base
 }
+
+const initialInputDelay = 4 * time.Second
 
 // Ensure Runner implements agent.Agent at compile time.
 var _ agent.Agent = (*Runner)(nil)
@@ -29,8 +32,18 @@ func NewRunner(database *db.DB) (*Runner, error) {
 
 // Run starts an Amp session.
 func (r *Runner) Run(ctx context.Context, opts agent.RunOptions) error {
-	cmd := r.buildCommand(opts)
-	return r.base.Execute(ctx, cmd, opts)
+	execOpts := prepareRunOptions(opts)
+	cmd := r.buildCommand(execOpts)
+	return r.base.Execute(ctx, cmd, execOpts)
+}
+
+func prepareRunOptions(opts agent.RunOptions) agent.RunOptions {
+	execOpts := opts
+	if !opts.PrintMode {
+		execOpts.InitialInput = agent.ApplyPromptPrefix(opts.Command, opts.TaskDescription, opts.CommentTag)
+		execOpts.InitialInputDelay = initialInputDelay
+	}
+	return execOpts
 }
 
 // DefaultModel returns the Amp-specific default model for a command type.
@@ -42,15 +55,6 @@ func (r *Runner) DefaultModel(cmd agent.CommandType) string {
 
 // buildCommand constructs the amp CLI command from the given options.
 func (r *Runner) buildCommand(opts agent.RunOptions) *exec.Cmd {
-	// Handle thread resume as a subcommand: amp threads continue [id]
-	if opts.ResumeSessionID != "" {
-		args := []string{"threads", "continue"}
-		if opts.ResumeSessionID != "*" {
-			args = append(args, opts.ResumeSessionID)
-		}
-		return exec.Command("amp", args...)
-	}
-
 	args := []string{}
 
 	// Amp uses --dangerously-allow-all to skip all command confirmation prompts.
@@ -58,15 +62,23 @@ func (r *Runner) buildCommand(opts agent.RunOptions) *exec.Cmd {
 		args = append(args, "--dangerously-allow-all")
 	}
 
+	// Handle thread resume as a subcommand: amp threads continue [id]
+	if opts.ResumeSessionID != "" {
+		args = append(args, "threads", "continue")
+		if opts.ResumeSessionID != "*" {
+			args = append(args, opts.ResumeSessionID)
+		}
+		return exec.Command("amp", args...)
+	}
+
 	// Amp uses -x (--execute) for non-interactive single-response mode.
+	taskDescription := agent.ApplyPromptPrefix(opts.Command, opts.TaskDescription, opts.CommentTag)
 	if opts.PrintMode {
-		if opts.TaskDescription != "" {
-			args = append(args, "-x", opts.TaskDescription)
+		if taskDescription != "" {
+			args = append(args, "-x", taskDescription)
 		} else {
 			args = append(args, "-x")
 		}
-	} else if opts.TaskDescription != "" {
-		args = append(args, opts.TaskDescription)
 	}
 
 	return exec.Command("amp", args...)

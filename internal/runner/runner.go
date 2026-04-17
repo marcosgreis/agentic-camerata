@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -375,6 +376,20 @@ func (b *Base) runWithPTY(ctx context.Context, cmd *exec.Cmd, session *db.Sessio
 		}
 	}()
 
+	if opts.InitialInput != "" {
+		go func() {
+			timer := time.NewTimer(opts.InitialInputDelay)
+			defer timer.Stop()
+
+			select {
+			case <-done:
+				return
+			case <-timer.C:
+				writeAll(ptmx, formatInitialInput(opts.InitialInput))
+			}
+		}()
+	}
+
 	// stdin -> PTY (with Ctrl+Z interception)
 	go func() {
 		buf := make([]byte, 1024)
@@ -423,6 +438,12 @@ func writeAll(w io.Writer, data []byte) {
 			return
 		}
 	}
+}
+
+func formatInitialInput(input string) []byte {
+	input = strings.ReplaceAll(input, "\r\n", "\n")
+	input = strings.ReplaceAll(input, "\r", "\n")
+	return append([]byte(input), '\r')
 }
 
 func isKilledError(err error) bool {

@@ -3,7 +3,6 @@ package claude
 
 import (
 	"context"
-	"os"
 	"os/exec"
 
 	"github.com/agentic-camerata/cmt/internal/agent"
@@ -30,10 +29,6 @@ func NewRunner(database *db.DB) (*Runner, error) {
 
 // Run starts a Claude session.
 func (r *Runner) Run(ctx context.Context, opts agent.RunOptions) error {
-	// Set comment tag from environment if not already set
-	if opts.CommentTag == "" {
-		opts.CommentTag = os.Getenv("CMT_COMMENT_TAG")
-	}
 	cmd := r.buildCommand(opts)
 	return r.base.Execute(ctx, cmd, opts)
 }
@@ -42,16 +37,16 @@ var opusVersioned = "claude-opus-4-5-20251101"
 
 // defaultModels maps command types to the default model for Claude.
 var defaultModels = map[agent.CommandType]string{
-	agent.CommandNew:        opusVersioned,
-	agent.CommandResearch:   opusVersioned,
-	agent.CommandPlan:       opusVersioned,
-	agent.CommandImplement:  "sonnet",
-	agent.CommandFixTest:         opusVersioned,
+	agent.CommandNew:              opusVersioned,
+	agent.CommandResearch:         opusVersioned,
+	agent.CommandPlan:             opusVersioned,
+	agent.CommandImplement:        "sonnet",
+	agent.CommandFixTest:          opusVersioned,
 	agent.CommandFixLocalComments: opusVersioned,
 	agent.CommandFixPRBuild:       opusVersioned,
 	agent.CommandFixPRComments:    opusVersioned,
-	agent.CommandQuick:       "haiku",
-	agent.CommandReview:     opusVersioned,
+	agent.CommandQuick:            "haiku",
+	agent.CommandReview:           opusVersioned,
 }
 
 // DefaultModel returns the Claude-specific default model for a command type.
@@ -92,16 +87,9 @@ func (r *Runner) buildCommand(opts agent.RunOptions) *exec.Cmd {
 		}
 	}
 
-	task := opts.TaskDescription
-	if prefix := GetPromptPrefix(opts.Command, opts.CommentTag); prefix != "" {
-		if task != "" {
-			task = prefix + " " + task
-		} else {
-			task = prefix
-		}
-	}
-	if task != "" {
-		args = append(args, task)
+	taskDescription := agent.ApplyPromptPrefix(opts.Command, opts.TaskDescription, opts.CommentTag)
+	if taskDescription != "" {
+		args = append(args, taskDescription)
 	}
 
 	return exec.Command("claude", args...)
