@@ -15,6 +15,7 @@ var (
 	colorBorder    = lipgloss.Color("#374151") // Dark gray
 	colorBg        = lipgloss.Color("#1F2937") // Dark background
 	colorFg        = lipgloss.Color("#F9FAFB") // Light foreground
+	colorSelected  = lipgloss.Color("#3F4752") // Selected row background
 )
 
 // Styles
@@ -90,9 +91,13 @@ var (
 
 	// Selection styles
 	selectedStyle = lipgloss.NewStyle().
-			Background(colorPrimary).
+			Background(lipgloss.Color("#3F4752")).
 			Foreground(colorFg).
 			Bold(true)
+
+	// Selected row style (full width background)
+	selectedRowStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("#3F4752"))
 
 	// Help style
 	helpStyle = lipgloss.NewStyle().

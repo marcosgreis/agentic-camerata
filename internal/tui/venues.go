@@ -257,7 +257,8 @@ func (d *Dashboard) renderVenueExpanded() string {
 			inHistory := !isRunning(item.Session)
 			line := d.formatSessionLine(item.Session, cols, isSelected, inHistory, item.Depth)
 			if isSelected {
-				content.WriteString(selectionIndicatorStyle.Render(">") + " " + line + "\n")
+				indicator := selectedRowStyle.Render("> ")
+				content.WriteString(indicator + line + "\n")
 			} else {
 				content.WriteString("  " + line + "\n")
 			}
@@ -266,7 +267,8 @@ func (d *Dashboard) renderVenueExpanded() string {
 			name := filepath.Base(item.DocPath)
 			name = strings.TrimSuffix(name, ".md")
 			if isSelected {
-				content.WriteString(selectionIndicatorStyle.Render(">") + " " + name + "\n")
+				indicator := selectedRowStyle.Render("> ")
+				content.WriteString(indicator + selectedRowStyle.Render(name) + "\n")
 			} else {
 				content.WriteString("  " + dimStyle.Render(name) + "\n")
 			}

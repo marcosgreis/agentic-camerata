@@ -131,9 +131,10 @@ func (d *Dashboard) renderTodosList() string {
 			break
 		}
 		isSelected := globalIdx == d.selected
-		line := d.formatTodoLine(sortedItems[i], promptWidth)
+		line := d.formatTodoLine(sortedItems[i], promptWidth, isSelected)
 		if isSelected {
-			content.WriteString(selectionIndicatorStyle.Render(">") + " " + line + "\n")
+			indicator := selectedRowStyle.Render("> ")
+			content.WriteString(indicator + line + "\n")
 		} else {
 			content.WriteString("  " + line + "\n")
 		}
@@ -157,9 +158,10 @@ func (d *Dashboard) renderTodosList() string {
 				break
 			}
 			isSelected := globalIdx == d.selected
-			line := d.formatTodoLine(sortedItems[i], promptWidth)
+			line := d.formatTodoLine(sortedItems[i], promptWidth, isSelected)
 			if isSelected {
-				content.WriteString(selectionIndicatorStyle.Render(">") + " " + line + "\n")
+				indicator := selectedRowStyle.Render("> ")
+				content.WriteString(indicator + line + "\n")
 			} else {
 				content.WriteString("  " + line + "\n")
 			}
@@ -204,13 +206,21 @@ func truncateToWidth(s string, width int) string {
 }
 
 // formatTodoLine formats a single todo row
-func (d *Dashboard) formatTodoLine(item *db.Todo, summaryWidth int) string {
+func (d *Dashboard) formatTodoLine(item *db.Todo, summaryWidth int, selected bool) string {
+	// Helper to apply background when selected
+	withBg := func(style lipgloss.Style) lipgloss.Style {
+		if selected {
+			return style.Background(colorSelected)
+		}
+		return style
+	}
+
 	// Status checkbox with color
 	var statusStyled string
 	if item.Status == db.TodoStatusTodo {
-		statusStyled = todoStatusTodo.Render("[ ] to do")
+		statusStyled = withBg(todoStatusTodo).Render("[ ] to do")
 	} else {
-		statusStyled = todoStatusDone.Render("[x] done")
+		statusStyled = withBg(todoStatusDone).Render("[x] done")
 	}
 
 	// Date
@@ -238,16 +248,16 @@ func (d *Dashboard) formatTodoLine(item *db.Todo, summaryWidth int) string {
 
 	if item.Status == db.TodoStatusDone {
 		return padRight(statusStyled, todoColStatusWidth) + " " +
-			dimStyle.Render(padRight(summary, summaryWidth)) + " " +
-			dimStyle.Render(padRight(senderStr, todoColSenderWidth)) + " " +
-			dimStyle.Render(padRight(dateStr, todoColDateWidth)) + " " +
-			dimStyle.Render(padRight(sourceStr, todoColSourceWidth))
+			withBg(dimStyle).Render(padRight(summary, summaryWidth)) + " " +
+			withBg(dimStyle).Render(padRight(senderStr, todoColSenderWidth)) + " " +
+			withBg(dimStyle).Render(padRight(dateStr, todoColDateWidth)) + " " +
+			withBg(dimStyle).Render(padRight(sourceStr, todoColSourceWidth))
 	}
 	return padRight(statusStyled, todoColStatusWidth) + " " +
-		padRight(summary, summaryWidth) + " " +
-		padRight(senderStr, todoColSenderWidth) + " " +
-		padRight(dateStr, todoColDateWidth) + " " +
-		padRight(sourceStr, todoColSourceWidth)
+		withBg(baseStyle).Render(padRight(summary, summaryWidth)) + " " +
+		withBg(baseStyle).Render(padRight(senderStr, todoColSenderWidth)) + " " +
+		withBg(baseStyle).Render(padRight(dateStr, todoColDateWidth)) + " " +
+		withBg(baseStyle).Render(padRight(sourceStr, todoColSourceWidth))
 }
 
 // formatTodoInfo formats the info panel content for a selected todo item

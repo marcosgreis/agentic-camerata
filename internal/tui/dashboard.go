@@ -804,7 +804,8 @@ func (d *Dashboard) renderSessionList() string {
 				line := d.formatSessionLine(s, cols, isSelected, true, 0) // Always dim in trash
 
 				if isSelected {
-					content.WriteString(selectionIndicatorStyle.Render(">") + " " + line + "\n")
+					indicator := selectedRowStyle.Render("> ")
+					content.WriteString(indicator + line + "\n")
 				} else {
 					content.WriteString("  " + line + "\n")
 				}
@@ -857,7 +858,8 @@ func (d *Dashboard) renderSessionList() string {
 					line := d.formatSessionLine(n.session, cols, isSelected, inHistoryStyle, n.depth)
 
 					if isSelected {
-						content.WriteString(selectionIndicatorStyle.Render(">") + " " + line + "\n")
+						indicator := selectedRowStyle.Render("> ")
+						content.WriteString(indicator + line + "\n")
 					} else {
 						content.WriteString("  " + line + "\n")
 					}
@@ -887,7 +889,8 @@ func (d *Dashboard) renderSessionList() string {
 						line := d.formatSessionLine(n.session, cols, isSelected, true, n.depth)
 
 						if isSelected {
-							content.WriteString(selectionIndicatorStyle.Render(">") + " " + line + "\n")
+							indicator := selectedRowStyle.Render("> ")
+							content.WriteString(indicator + line + "\n")
 						} else {
 							content.WriteString("  " + line + "\n")
 						}
@@ -981,53 +984,64 @@ func (d *Dashboard) formatSessionLine(s *db.Session, cols visibleColumns, select
 	// Replace newlines with spaces for single-line display
 	prompt = strings.ReplaceAll(prompt, "\n", " ")
 
+	// Helper to apply background when selected
+	withBg := func(style lipgloss.Style) lipgloss.Style {
+		if selected {
+			return style.Background(colorSelected)
+		}
+		return style
+	}
+
 	// Format with colors - use dimmed variants for history section
 	var parts []string
 	if cols.id {
 		idField := indent + fmt.Sprintf("%-*s", colIDWidth, id)
 		if inHistory {
-			parts = append(parts, dimIDStyle.Render(idField))
+			parts = append(parts, withBg(dimIDStyle).Render(idField))
 		} else {
-			parts = append(parts, idField)
+			parts = append(parts, withBg(baseStyle).Render(idField))
 		}
 	}
 	if cols.status {
 		var status string
 		if inHistory {
-			status = StatusStyleDim(statusStr).Render(fmt.Sprintf("%-*s", colStatusWidth, statusStr))
+			status = withBg(StatusStyleDim(statusStr)).Render(fmt.Sprintf("%-*s", colStatusWidth, statusStr))
 		} else {
-			status = StatusStyle(statusStr).Render(fmt.Sprintf("%-*s", colStatusWidth, statusStr))
+			status = withBg(StatusStyle(statusStr)).Render(fmt.Sprintf("%-*s", colStatusWidth, statusStr))
 		}
 		parts = append(parts, status)
 	}
 	if cols.workflow {
 		var workflow string
 		if inHistory {
-			workflow = WorkflowStyleDim(workflowStr).Render(fmt.Sprintf("%-*s", colWorkflowWidth, workflowDisplay))
+			workflow = withBg(WorkflowStyleDim(workflowStr)).Render(fmt.Sprintf("%-*s", colWorkflowWidth, workflowDisplay))
 		} else {
-			workflow = WorkflowStyle(workflowStr).Render(fmt.Sprintf("%-*s", colWorkflowWidth, workflowDisplay))
+			workflow = withBg(WorkflowStyle(workflowStr)).Render(fmt.Sprintf("%-*s", colWorkflowWidth, workflowDisplay))
 		}
 		parts = append(parts, workflow)
 	}
 	if cols.age {
+		ageField := fmt.Sprintf("%*s  ", colAgeWidth, age)
 		if inHistory {
-			parts = append(parts, dimAgeStyle.Render(fmt.Sprintf("%*s", colAgeWidth, age))+"  ")
+			parts = append(parts, withBg(dimAgeStyle).Render(ageField))
 		} else {
-			parts = append(parts, fmt.Sprintf("%*s  ", colAgeWidth, age))
+			parts = append(parts, withBg(baseStyle).Render(ageField))
 		}
 	}
 	if cols.prefix {
+		prefixField := fmt.Sprintf("%-*s", colPrefixWidth, prefix)
 		if inHistory {
-			parts = append(parts, dimStyle.Render(fmt.Sprintf("%-*s", colPrefixWidth, prefix)))
+			parts = append(parts, withBg(dimStyle).Render(prefixField))
 		} else {
-			parts = append(parts, fmt.Sprintf("%-*s", colPrefixWidth, prefix))
+			parts = append(parts, withBg(baseStyle).Render(prefixField))
 		}
 	}
 	if cols.prompt {
+		promptField := "     " + prompt
 		if inHistory {
-			parts = append(parts, dimStyle.Render("     "+prompt))
+			parts = append(parts, withBg(dimStyle).Render(promptField))
 		} else {
-			parts = append(parts, baseStyle.Render("     "+prompt))
+			parts = append(parts, withBg(baseStyle).Render(promptField))
 		}
 	}
 
