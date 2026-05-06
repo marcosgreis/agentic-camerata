@@ -4,6 +4,7 @@ package codex
 import (
 	"context"
 	"os/exec"
+	"strings"
 
 	"github.com/agentic-camerata/cmt/internal/agent"
 	"github.com/agentic-camerata/cmt/internal/db"
@@ -47,9 +48,9 @@ func (r *Runner) buildCommand(opts agent.RunOptions) *exec.Cmd {
 		args = append(args, "--model", opts.Model)
 	}
 
-	// Codex uses --full-auto for low-friction sandboxed automatic execution.
+	// Codex uses -a never to skip approval prompts.
 	if opts.AutonomousMode {
-		args = append(args, "--full-auto")
+		args = append(args, "-a", "never")
 	}
 
 	// Codex uses -q (quiet) for non-interactive single-response mode.
@@ -57,10 +58,36 @@ func (r *Runner) buildCommand(opts agent.RunOptions) *exec.Cmd {
 		args = append(args, "-q")
 	}
 
-	taskDescription := agent.ApplyPromptPrefix(opts.Command, opts.TaskDescription, opts.CommentTag)
+	taskDescription := applyPromptPrefix(opts.Command, opts.TaskDescription, opts.CommentTag)
 	if taskDescription != "" {
 		args = append(args, taskDescription)
 	}
 
 	return exec.Command("codex", args...)
+}
+
+func applyPromptPrefix(cmd agent.CommandType, taskDescription, commentTag string) string {
+	prefix := agent.GetPromptPrefix(cmd, commentTag)
+	if prefix == "" {
+		return taskDescription
+	}
+
+	prefix = hyphenateSlashCommand(prefix)
+	if taskDescription == "" {
+		return prefix
+	}
+	return prefix + " " + taskDescription
+}
+
+func hyphenateSlashCommand(prefix string) string {
+	if !strings.HasPrefix(prefix, "/") {
+		return prefix
+	}
+
+	command, rest, found := strings.Cut(prefix, " ")
+	command = strings.ReplaceAll(command, "_", "-")
+	if !found {
+		return command
+	}
+	return command + " " + rest
 }

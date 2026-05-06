@@ -31,13 +31,24 @@ func TestBuildCommand(t *testing.T) {
 		notWantArgs []string
 	}{
 		{
-			name: "research workflow prefixes task description",
+			name: "research workflow hyphenates slash command prefix",
 			opts: agent.RunOptions{
 				Command:         agent.CommandResearch,
 				WorkflowType:    db.WorkflowResearch,
 				TaskDescription: "test topic",
 			},
-			wantArgs: []string{"/research_codebase test topic"},
+			wantArgs:    []string{"/research-codebase test topic"},
+			notWantArgs: []string{"/research_codebase"},
+		},
+		{
+			name: "implement workflow hyphenates slash command only",
+			opts: agent.RunOptions{
+				Command:         agent.CommandImplement,
+				WorkflowType:    db.WorkflowImplement,
+				TaskDescription: "phase 1",
+			},
+			wantArgs:    []string{"/implement-plan implement all phases ignoring any manual verification steps phase 1"},
+			notWantArgs: []string{"/implement_plan"},
 		},
 		{
 			name: "fix-local-comments includes custom tag",
@@ -58,7 +69,8 @@ func TestBuildCommand(t *testing.T) {
 				TaskDescription: "payments",
 				PrintMode:       true,
 			},
-			wantArgs: []string{"-q", "/review_code payments"},
+			wantArgs:    []string{"-q", "/review-code payments"},
+			notWantArgs: []string{"/review_code"},
 		},
 	}
 
