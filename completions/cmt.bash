@@ -15,7 +15,7 @@ _cmt_completions() {
     # Handle global flag value completions before command-specific
     case "$prev" in
         --agent)
-            COMPREPLY=($(compgen -W "claude codex amp" -- "$cur"))
+            COMPREPLY=($(compgen -W "pi claude codex amp" -- "$cur"))
             return 0
             ;;
         --loop)

@@ -131,10 +131,10 @@ func ParseContent(content string) (*Playbook, error) {
 	}
 
 	// Validate agent values
-	validAgents := map[string]bool{"claude": true, "codex": true, "amp": true}
+	validAgents := map[string]bool{"claude": true, "codex": true, "amp": true, "pi": true}
 	for i, p := range phases {
 		if p.Agent != "" && !validAgents[p.Agent] {
-			return nil, fmt.Errorf("phase %d (%s): unknown agent %q (valid: claude, codex, amp)", i+1, p.Type, p.Agent)
+			return nil, fmt.Errorf("phase %d (%s): unknown agent %q (valid: claude, codex, amp, pi)", i+1, p.Type, p.Agent)
 		}
 	}
 

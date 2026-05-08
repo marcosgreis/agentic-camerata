@@ -34,7 +34,7 @@ _cmt() {
         '(-a --autonomous)'{-a,--autonomous}'[Enable autonomous mode (skip permission prompts)]'
         '(-h --help)'{-h,--help}'[Show help]'
         '--model[Override default model]:model:'
-        '--agent[Agent backend (claude, codex, amp)]:agent:(claude codex amp)'
+        '--agent[Agent backend (pi, claude, codex, amp)]:agent:(pi claude codex amp)'
     )
 
     local -a file_opts

@@ -14,7 +14,7 @@ complete -c cmt -s v -l verbose -d 'Enable verbose output'
 complete -c cmt -s a -l autonomous -d 'Enable autonomous mode (skip permission prompts)'
 complete -c cmt -s h -l help -d 'Show help'
 complete -c cmt -n "__fish_use_subcommand" -l model -d "Override default model"
-complete -c cmt -n "__fish_use_subcommand" -l agent -d "Agent backend (claude, codex, amp)" -r -f -a "claude codex amp"
+complete -c cmt -n "__fish_use_subcommand" -l agent -d "Agent backend (pi, claude, codex, amp)" -r -f -a "pi claude codex amp"
 
 # Commands
 complete -c cmt -n __fish_use_subcommand -a new -d 'Start a new Claude session'

@@ -1,5 +1,5 @@
-// Package claude implements the Agent interface for the Claude CLI.
-package claude
+// Package pi implements the Agent interface for the Pi coding agent.
+package pi
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/agentic-camerata/cmt/internal/runner"
 )
 
-// Runner manages Claude CLI execution.
+// Runner manages Pi CLI execution.
 type Runner struct {
 	base *runner.Base
 }
@@ -18,7 +18,7 @@ type Runner struct {
 // Ensure Runner implements agent.Agent at compile time.
 var _ agent.Agent = (*Runner)(nil)
 
-// NewRunner creates a new Claude runner.
+// NewRunner creates a new Pi runner.
 func NewRunner(database *db.DB) (*Runner, error) {
 	base, err := runner.NewBase(database)
 	if err != nil {
@@ -27,29 +27,29 @@ func NewRunner(database *db.DB) (*Runner, error) {
 	return &Runner{base: base}, nil
 }
 
-// Run starts a Claude session.
+// Run starts a Pi session.
 func (r *Runner) Run(ctx context.Context, opts agent.RunOptions) error {
 	cmd := r.buildCommand(opts)
 	return r.base.Execute(ctx, cmd, opts)
 }
 
-var opusVersioned = "claude-opus-4-5"
-
-// defaultModels maps command types to the default model for Claude.
+var opusVersioned = "claude-opus-4-6"
+// defaultModels maps command types to the default model for Pi.
+// Pi is provider-agnostic; these defaults use Anthropic models via Pi's model pattern syntax.
 var defaultModels = map[agent.CommandType]string{
 	agent.CommandNew:              opusVersioned,
 	agent.CommandResearch:         opusVersioned,
 	agent.CommandPlan:             opusVersioned,
-	agent.CommandImplement:        "sonnet",
+	agent.CommandImplement:        "claude-sonnet-4-6",
 	agent.CommandFixTest:          opusVersioned,
 	agent.CommandFixLocalComments: opusVersioned,
 	agent.CommandFixPRBuild:       opusVersioned,
 	agent.CommandFixPRComments:    opusVersioned,
-	agent.CommandQuick:            "haiku",
+	agent.CommandQuick:            "claude-haiku-4-5",
 	agent.CommandReview:           opusVersioned,
 }
 
-// DefaultModel returns the Claude-specific default model for a command type.
+// DefaultModel returns the Pi-specific default model for a command type.
 func (r *Runner) DefaultModel(cmd agent.CommandType) string {
 	if m, ok := defaultModels[cmd]; ok {
 		return m
@@ -57,11 +57,9 @@ func (r *Runner) DefaultModel(cmd agent.CommandType) string {
 	return opusVersioned
 }
 
-// buildCommand constructs the claude CLI command from the given options.
+// buildCommand constructs the pi CLI command from the given options.
 func (r *Runner) buildCommand(opts agent.RunOptions) *exec.Cmd {
 	args := []string{}
-	// hardcoded max effort to make sure it respects this option
-	args = append(args, "--effort", "max")
 
 	model := opts.Model
 	if model == "" {
@@ -71,26 +69,31 @@ func (r *Runner) buildCommand(opts agent.RunOptions) *exec.Cmd {
 		args = append(args, "--model", model)
 	}
 
+	// Pi has no permission popups, so no autonomous flag needed.
+
 	if opts.PrintMode {
 		args = append(args, "-p")
 	}
 
-	if opts.AutonomousMode {
-		args = append(args, "--dangerously-skip-permissions")
-	}
-
+	// Session resume support
 	if opts.ResumeSessionID != "" {
 		if opts.ResumeSessionID == "*" {
 			args = append(args, "--resume")
 		} else {
-			args = append(args, "--resume", opts.ResumeSessionID)
+			args = append(args, "--session", opts.ResumeSessionID)
 		}
 	}
 
+	// Skip session persistence for ephemeral commands
+	if opts.SkipTracking {
+		args = append(args, "--no-session")
+	}
+
+	// Build task with prompt prefix (uses underscore slash commands, same as Claude)
 	taskDescription := agent.ApplyPromptPrefix(opts.Command, opts.TaskDescription, opts.CommentTag)
 	if taskDescription != "" {
 		args = append(args, taskDescription)
 	}
 
-	return exec.Command("claude", args...)
+	return exec.Command("pi", args...)
 }
