@@ -51,6 +51,7 @@ func (c *ImplementCmd) Run(cli *CLI) error {
 			WorkflowType:    db.WorkflowImplement,
 			TaskDescription: task,
 			Model:           cli.Model,
+			Effort:          cli.Effort,
 			AutonomousMode:  cli.Autonomous,
 			LoopInterval:    c.Interval,
 			AutoTerminate:   c.Interval != "",

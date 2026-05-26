@@ -35,6 +35,7 @@ func (c *FixPRCommentsCmd) Run(cli *CLI) error {
 			WorkflowType:    db.WorkflowFix,
 			TaskDescription: prLink,
 			Model:           cli.Model,
+			Effort:          cli.Effort,
 			AutonomousMode:  cli.Autonomous,
 			LoopInterval:    c.Interval,
 			AutoTerminate:   c.Interval != "",

@@ -35,6 +35,7 @@ func (c *ResearchCmd) Run(cli *CLI) error {
 			WorkflowType:    db.WorkflowResearch,
 			TaskDescription: topic,
 			Model:           cli.Model,
+			Effort:          cli.Effort,
 			AutonomousMode:  cli.Autonomous,
 			LoopInterval:    c.Interval,
 			AutoTerminate:   c.Interval != "",

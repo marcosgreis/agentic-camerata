@@ -444,6 +444,7 @@ func runPlaybook(cli *CLI, database *db.DB, sessionID string, pb *playbook.Playb
 			WorkflowType:      mapping.Workflow,
 			TaskDescription:   task,
 			Model:             cli.Model,
+			Effort:            cli.Effort,
 			AutoTerminate:     i < total-1,
 			AutonomousMode:    cli.Autonomous,
 			CapturedFiles:     &phaseCaptured,

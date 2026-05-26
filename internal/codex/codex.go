@@ -40,6 +40,11 @@ func (r *Runner) DefaultModel(cmd agent.CommandType) string {
 	return ""
 }
 
+// DefaultEffort returns "" because Codex has no effort concept.
+func (r *Runner) DefaultEffort(cmd agent.CommandType) string {
+	return ""
+}
+
 // buildCommand constructs the codex CLI command from the given options.
 func (r *Runner) buildCommand(opts agent.RunOptions) *exec.Cmd {
 	args := []string{}

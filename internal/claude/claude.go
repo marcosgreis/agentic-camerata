@@ -35,6 +35,27 @@ func (r *Runner) Run(ctx context.Context, opts agent.RunOptions) error {
 
 var opusVersioned = "claude-opus-4-5"
 
+var defaultEfforts = map[agent.CommandType]string{
+	agent.CommandNew:              "high",
+	agent.CommandResearch:         "max",
+	agent.CommandPlan:             "max",
+	agent.CommandImplement:        "high",
+	agent.CommandFixTest:          "high",
+	agent.CommandFixLocalComments: "high",
+	agent.CommandFixPRBuild:       "high",
+	agent.CommandFixPRComments:    "high",
+	agent.CommandQuick:            "normal",
+	agent.CommandReview:           "max",
+}
+
+// DefaultEffort returns the Claude-specific default effort for a command type.
+func (r *Runner) DefaultEffort(cmd agent.CommandType) string {
+	if e, ok := defaultEfforts[cmd]; ok {
+		return e
+	}
+	return "max"
+}
+
 // defaultModels maps command types to the default model for Claude.
 var defaultModels = map[agent.CommandType]string{
 	agent.CommandNew:              opusVersioned,
@@ -60,8 +81,14 @@ func (r *Runner) DefaultModel(cmd agent.CommandType) string {
 // buildCommand constructs the claude CLI command from the given options.
 func (r *Runner) buildCommand(opts agent.RunOptions) *exec.Cmd {
 	args := []string{}
-	// hardcoded max effort to make sure it respects this option
-	args = append(args, "--effort", "max")
+
+	effort := opts.Effort
+	if effort == "" {
+		effort = r.DefaultEffort(opts.Command)
+	}
+	if effort != "" {
+		args = append(args, "--effort", effort)
+	}
 
 	model := opts.Model
 	if model == "" {

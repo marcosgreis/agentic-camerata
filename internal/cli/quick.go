@@ -36,6 +36,7 @@ func (c *QuickCmd) Run(cli *CLI) error {
 		WorkflowType:    db.WorkflowGeneral,
 		TaskDescription: prompt,
 		Model:           cli.Model,
+		Effort:          cli.Effort,
 		PrintMode:       true,
 		AutonomousMode:  cli.Autonomous,
 		SkipTracking:    true,

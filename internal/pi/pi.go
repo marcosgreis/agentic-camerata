@@ -34,6 +34,28 @@ func (r *Runner) Run(ctx context.Context, opts agent.RunOptions) error {
 }
 
 var opusVersioned = "claude-opus-4-6"
+
+var defaultEfforts = map[agent.CommandType]string{
+	agent.CommandNew:              "high",
+	agent.CommandResearch:         "max",
+	agent.CommandPlan:             "max",
+	agent.CommandImplement:        "high",
+	agent.CommandFixTest:          "high",
+	agent.CommandFixLocalComments: "high",
+	agent.CommandFixPRBuild:       "high",
+	agent.CommandFixPRComments:    "high",
+	agent.CommandQuick:            "normal",
+	agent.CommandReview:           "max",
+}
+
+// DefaultEffort returns the Pi-specific default effort for a command type.
+func (r *Runner) DefaultEffort(cmd agent.CommandType) string {
+	if e, ok := defaultEfforts[cmd]; ok {
+		return e
+	}
+	return "max"
+}
+
 // defaultModels maps command types to the default model for Pi.
 // Pi is provider-agnostic; these defaults use Anthropic models via Pi's model pattern syntax.
 var defaultModels = map[agent.CommandType]string{
@@ -60,6 +82,14 @@ func (r *Runner) DefaultModel(cmd agent.CommandType) string {
 // buildCommand constructs the pi CLI command from the given options.
 func (r *Runner) buildCommand(opts agent.RunOptions) *exec.Cmd {
 	args := []string{}
+
+	effort := opts.Effort
+	if effort == "" {
+		effort = r.DefaultEffort(opts.Command)
+	}
+	if effort != "" {
+		args = append(args, "--effort", effort)
+	}
 
 	model := opts.Model
 	if model == "" {

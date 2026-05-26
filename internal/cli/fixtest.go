@@ -35,6 +35,7 @@ func (c *FixTestCmd) Run(cli *CLI) error {
 			WorkflowType:    db.WorkflowFix,
 			TaskDescription: test,
 			Model:           cli.Model,
+			Effort:          cli.Effort,
 			AutonomousMode:  cli.Autonomous,
 			LoopInterval:    c.Interval,
 			AutoTerminate:   c.Interval != "",

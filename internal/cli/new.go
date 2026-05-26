@@ -44,6 +44,7 @@ func (c *NewCmd) Run(cli *CLI) error {
 			WorkflowType:    db.WorkflowGeneral,
 			TaskDescription: task,
 			Model:           cli.Model,
+			Effort:          cli.Effort,
 			AutonomousMode:  cli.Autonomous,
 			ResumeSessionID: resumeID,
 			LoopInterval:    c.Interval,

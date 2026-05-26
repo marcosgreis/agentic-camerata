@@ -33,6 +33,7 @@ type RunOptions struct {
 	InitialInputDelay time.Duration  // Delay before writing InitialInput to the PTY
 	WorkingDir        string         // Override working directory
 	Model             string         // Model to use (e.g., "sonnet", "opus")
+	Effort            string         // Effort level (e.g., "low", "normal", "max"). Empty means use agent default.
 	PrintMode         bool           // If true, print response and exit (non-interactive)
 	AutonomousMode    bool           // If true, skip permission prompts
 	CommentTag        string         // Comment tag for fix-local-comments (from CMT_COMMENT_TAG env var)
@@ -53,4 +54,7 @@ type Agent interface {
 	// DefaultModel returns the runner-specific default model for a command type.
 	// Returns "" if the runner should use its CLI's built-in default.
 	DefaultModel(cmd CommandType) string
+	// DefaultEffort returns the runner-specific default effort for a command type.
+	// Returns "" if the runner has no effort concept or should use its CLI's built-in default.
+	DefaultEffort(cmd CommandType) string
 }

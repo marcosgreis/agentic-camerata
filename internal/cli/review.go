@@ -32,6 +32,7 @@ func (c *ReviewCmd) Run(cli *CLI) error {
 		WorkflowType:    db.WorkflowReview,
 		TaskDescription: focus,
 		Model:           cli.Model,
+		Effort:          cli.Effort,
 		AutonomousMode:  cli.Autonomous,
 	})
 }

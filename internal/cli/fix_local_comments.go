@@ -36,6 +36,7 @@ func (c *FixLocalCommentsCmd) Run(cli *CLI) error {
 			WorkflowType:    db.WorkflowFix,
 			TaskDescription: issue,
 			Model:           cli.Model,
+			Effort:          cli.Effort,
 			AutonomousMode:  cli.Autonomous,
 			CommentTag:      c.CommentTag,
 			LoopInterval:    c.Interval,
