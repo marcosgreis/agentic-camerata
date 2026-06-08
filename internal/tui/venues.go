@@ -136,15 +136,9 @@ func buildVenueItems(venue *Venue, sessions []*db.Session) []VenueItem {
 		venueSessions = append(venueSessions, s)
 	}
 
-	// Build tree-ordered nodes for hierarchy display
-	nodes := buildSessionTree(venueSessions)
-	for _, n := range nodes {
-		items = append(items, VenueItem{
-			Type:      VenueItemSession,
-			Session:   n.session,
-			Depth:     n.depth,
-			InRunning: n.inRunning,
-		})
+	// Add other documents first (thoughts/ excluding plans/ and research/)
+	for _, path := range listOtherMdFiles(venue.Directory) {
+		items = append(items, VenueItem{Type: VenueItemDocument, DocPath: path, DocType: DocTypeOther})
 	}
 
 	// Add plan documents
@@ -159,9 +153,15 @@ func buildVenueItems(venue *Venue, sessions []*db.Session) []VenueItem {
 		items = append(items, VenueItem{Type: VenueItemDocument, DocPath: path, DocType: DocTypeResearch})
 	}
 
-	// Add other documents (thoughts/ excluding plans/ and research/)
-	for _, path := range listOtherMdFiles(venue.Directory) {
-		items = append(items, VenueItem{Type: VenueItemDocument, DocPath: path, DocType: DocTypeOther})
+	// Build tree-ordered nodes for hierarchy display (sessions at the end)
+	nodes := buildSessionTree(venueSessions)
+	for _, n := range nodes {
+		items = append(items, VenueItem{
+			Type:      VenueItemSession,
+			Session:   n.session,
+			Depth:     n.depth,
+			InRunning: n.inRunning,
+		})
 	}
 
 	return items
@@ -229,18 +229,17 @@ func (d *Dashboard) renderVenueExpanded() string {
 		}
 
 		// Determine which section this item belongs to
+		// Order: Other (0), Plans (1), Research (2), History (3)
 		newSection := -1
 		switch {
-		case item.Type == VenueItemSession && item.InRunning:
-			newSection = 0
-		case item.Type == VenueItemSession:
-			newSection = 1
-		case item.Type == VenueItemDocument && item.DocType == DocTypePlan:
-			newSection = 2
-		case item.Type == VenueItemDocument && item.DocType == DocTypeResearch:
-			newSection = 3
 		case item.Type == VenueItemDocument && item.DocType == DocTypeOther:
-			newSection = 4
+			newSection = 0
+		case item.Type == VenueItemDocument && item.DocType == DocTypePlan:
+			newSection = 1
+		case item.Type == VenueItemDocument && item.DocType == DocTypeResearch:
+			newSection = 2
+		case item.Type == VenueItemSession:
+			newSection = 3
 		}
 
 		// Emit section header when entering a new section
@@ -255,20 +254,18 @@ func (d *Dashboard) renderVenueExpanded() string {
 			var headerStyle lipgloss.Style
 			switch newSection {
 			case 0:
-				headerText = fmt.Sprintf("● RUNNING (%d)", runningCount)
-				headerStyle = sectionActiveHeader
-			case 1:
-				headerText = fmt.Sprintf("○ HISTORY (%d)", historyCount)
-				headerStyle = sectionHistoryHeader
-			case 2:
-				headerText = fmt.Sprintf("📝 PLANS (%d)", planCount)
-				headerStyle = sectionVenuesHeader
-			case 3:
-				headerText = fmt.Sprintf("📜 RESEARCH (%d)", researchCount)
-				headerStyle = sectionVenuesHeader
-			case 4:
 				headerText = fmt.Sprintf("📄 OTHER (%d)", otherCount)
 				headerStyle = sectionVenuesHeader
+			case 1:
+				headerText = fmt.Sprintf("📝 PLANS (%d)", planCount)
+				headerStyle = sectionVenuesHeader
+			case 2:
+				headerText = fmt.Sprintf("📜 RESEARCH (%d)", researchCount)
+				headerStyle = sectionVenuesHeader
+			case 3:
+				sessionCount := runningCount + historyCount
+				headerText = fmt.Sprintf("○ HISTORY (%d)", sessionCount)
+				headerStyle = sectionHistoryHeader
 			}
 			content.WriteString(headerStyle.Width(listWidth - 4).Render(headerText))
 			content.WriteString("\n")
