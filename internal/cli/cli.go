@@ -22,6 +22,7 @@ type CLI struct {
 	Jump       JumpCmd       `cmd:"" help:"Jump to a session's tmux location"`
 	Dashboard  DashboardCmd  `cmd:"" help:"Open the TUI dashboard"`
 	Todo       TodoCmd       `cmd:"" help:"Manage todos"`
+	Venue      VenueCmd      `cmd:"" help:"Manage pinned venues"`
 
 	// Global flags
 	DB         string `help:"Database path" default:"~/.config/cmt/sessions.db" env:"CMT_DB" optional:""`

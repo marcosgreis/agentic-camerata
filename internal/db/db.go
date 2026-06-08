@@ -101,6 +101,14 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("migrate todos table: %w", err)
 	}
 
+	// Create venues table if it doesn't exist (for existing databases)
+	if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS venues (
+		directory TEXT PRIMARY KEY,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		return nil, fmt.Errorf("create venues table: %w", err)
+	}
+
 	// Add todos columns if they don't exist
 	if err := addColumnIfNotExists(conn, `ALTER TABLE todos ADD COLUMN idempotency_key TEXT`, "todos idempotency_key column"); err != nil {
 		return nil, err

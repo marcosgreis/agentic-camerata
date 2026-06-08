@@ -30,6 +30,7 @@ type Venue struct {
 	TotalCount    int
 	PlanCount     int
 	ResearchCount int
+	Pinned        bool // true if this venue was explicitly pinned
 }
 
 // VenueItemType distinguishes sessions from documents in the expanded view
@@ -58,9 +59,14 @@ type VenueItem struct {
 	DocType   DocumentType // plan or research
 }
 
-// buildVenues aggregates sessions by working directory
-func buildVenues(sessions []*db.Session) []Venue {
+// buildVenues aggregates sessions by working directory and merges pinned venues
+func buildVenues(sessions []*db.Session, pinnedDirs []string) []Venue {
 	venueMap := make(map[string]*Venue)
+
+	// Initialize pinned venues first so they appear even with 0 sessions
+	for _, dir := range pinnedDirs {
+		venueMap[dir] = &Venue{Directory: dir, Pinned: true}
+	}
 
 	for _, s := range sessions {
 		dir := s.WorkingDirectory
@@ -93,8 +99,11 @@ func buildVenues(sessions []*db.Session) []Venue {
 		venues[i].ResearchCount = countMdFiles(filepath.Join(venues[i].Directory, "thoughts", "shared", "research"))
 	}
 
-	// Sort: running count desc, then total count desc, then directory asc
+	// Sort: pinned first, then running count desc, then total count desc, then directory asc
 	sort.Slice(venues, func(i, j int) bool {
+		if venues[i].Pinned != venues[j].Pinned {
+			return venues[i].Pinned
+		}
 		if venues[i].RunningCount != venues[j].RunningCount {
 			return venues[i].RunningCount > venues[j].RunningCount
 		}
@@ -311,7 +320,7 @@ func (d *Dashboard) renderVenuesGrid(display VenueDisplay) string {
 
 // renderVenuesBoxGrid renders venues as a grid of boxes
 func (d *Dashboard) renderVenuesBoxGrid() string {
-	venues := buildVenues(d.sessions)
+	venues := buildVenues(d.sessions, d.pinnedVenues)
 	width := d.listWidth()
 	height := d.contentHeight()
 
@@ -483,18 +492,23 @@ func renderVenueBox(v Venue, width, height int, selected bool) string {
 	// Whether we have room for a second line (counts)
 	hasCountsSpace := innerHeight >= 2
 
+	// Add pin marker for pinned venues (📌 is 2 display cols + 1 space = 3)
+	if v.Pinned && len(name)+3 <= innerWidth {
+		name = "📌 " + name
+	}
+
 	if v.RunningCount > 0 {
 		// Truncate name if needed to fit with " R" suffix
 		maxName := innerWidth - 2 // space + "R"
 		if maxName < 1 {
 			maxName = 1
 		}
-		if len(name) > maxName {
+		if displayWidth(name) > maxName {
 			name = name[:maxName-1] + "…"
 		}
 		name = name + " " + statusWorking.Render("R")
 	} else {
-		if len(name) > innerWidth {
+		if displayWidth(name) > innerWidth {
 			name = name[:innerWidth-1] + "…"
 		}
 	}

@@ -40,11 +40,12 @@ const ViewTodos = viewTodos
 
 // Dashboard is the main TUI model
 type Dashboard struct {
-	db       *db.DB
-	sessions []*db.Session
-	todos    []*db.Todo
-	selected int
-	focus    int
+	db           *db.DB
+	sessions     []*db.Session
+	todos        []*db.Todo
+	pinnedVenues []string // pinned venue directories from DB
+	selected     int
+	focus        int
 
 	// Components
 	infoViewport viewport.Model
@@ -126,6 +127,12 @@ type todosLoadedMsg struct {
 	err   error
 }
 
+// pinnedVenuesLoadedMsg is sent when pinned venues are loaded
+type pinnedVenuesLoadedMsg struct {
+	dirs []string
+	err  error
+}
+
 // tickMsg triggers periodic updates
 type tickMsg time.Time
 
@@ -141,8 +148,22 @@ func (d *Dashboard) Init() tea.Cmd {
 		d.pruneDeletedSessions,
 		d.loadSessions,
 		d.loadTodos,
+		d.loadPinnedVenues,
 		d.tick(),
 	)
+}
+
+// loadPinnedVenues fetches pinned venues from the database
+func (d *Dashboard) loadPinnedVenues() tea.Msg {
+	venues, err := d.db.ListVenues()
+	if err != nil {
+		return pinnedVenuesLoadedMsg{err: err}
+	}
+	dirs := make([]string, len(venues))
+	for i, v := range venues {
+		dirs[i] = v.Directory
+	}
+	return pinnedVenuesLoadedMsg{dirs: dirs}
 }
 
 // pruneDeletedSessions removes old deleted sessions
@@ -487,10 +508,16 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case pinnedVenuesLoadedMsg:
+		if msg.err == nil {
+			d.pinnedVenues = msg.dirs
+		}
+
 	case tickMsg:
-		// Periodic refresh of sessions and todos
+		// Periodic refresh of sessions, todos, and pinned venues
 		cmds = append(cmds, d.loadSessions)
 		cmds = append(cmds, d.loadTodos)
+		cmds = append(cmds, d.loadPinnedVenues)
 		cmds = append(cmds, d.tick())
 	}
 
@@ -1119,7 +1146,7 @@ func (d *Dashboard) renderHelp() string {
 // listLen returns the number of items in the current view
 func (d *Dashboard) listLen() int {
 	if d.viewMode == viewVenues {
-		return len(buildVenues(d.sessions))
+		return len(buildVenues(d.sessions, d.pinnedVenues))
 	}
 	if d.viewMode == viewVenueExpanded {
 		return len(d.expandedItems)
@@ -1158,7 +1185,7 @@ func (d *Dashboard) ensureVenueSelectionVisible() {
 
 // enterVenueExpanded transitions from venue grid to expanded venue view
 func (d *Dashboard) enterVenueExpanded() {
-	venues := buildVenues(d.sessions)
+	venues := buildVenues(d.sessions, d.pinnedVenues)
 	if d.selected >= len(venues) {
 		return
 	}
