@@ -205,10 +205,9 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							d.updateInfoContent()
 						}
 					}
-				} else if d.viewMode == viewVenues && d.venueGridCols > 0 {
-					newSel := d.selected + d.venueGridCols
-					if newSel < d.listLen() {
-						d.selected = newSel
+				} else if d.viewMode == viewVenues {
+					if d.selected < d.listLen()-1 {
+						d.selected++
 						d.ensureVenueSelectionVisible()
 					}
 				} else if d.selected < d.listLen()-1 {
@@ -239,10 +238,9 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							d.updateInfoContent()
 						}
 					}
-				} else if d.viewMode == viewVenues && d.venueGridCols > 0 {
-					newSel := d.selected - d.venueGridCols
-					if newSel >= 0 {
-						d.selected = newSel
+				} else if d.viewMode == viewVenues {
+					if d.selected > 0 {
+						d.selected--
 						d.ensureVenueSelectionVisible()
 					}
 				} else if d.selected > 0 {
@@ -262,20 +260,10 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "h", "left":
-			if d.viewMode == viewVenues && d.focus == focusList && d.selected > 0 && d.venueGridCols > 0 {
-				if d.selected%d.venueGridCols > 0 {
-					d.selected--
-					d.ensureVenueSelectionVisible()
-				}
-			}
+			// Left/right disabled in venues view (single column)
 
 		case "l", "right":
-			if d.viewMode == viewVenues && d.focus == focusList && d.selected < d.listLen()-1 && d.venueGridCols > 0 {
-				if d.selected%d.venueGridCols < d.venueGridCols-1 {
-					d.selected++
-					d.ensureVenueSelectionVisible()
-				}
-			}
+			// Left/right disabled in venues view (single column)
 
 		case "enter":
 			if d.viewMode == viewVenues && d.focus == focusList {
@@ -1156,13 +1144,10 @@ func (d *Dashboard) normalViewSession(idx int) *db.Session {
 	return nil
 }
 
-// ensureVenueSelectionVisible adjusts venueScrollRow so the selected venue's
-// row is within the visible window.
+// ensureVenueSelectionVisible adjusts venueScrollRow so the selected venue
+// is within the visible window. In single-column mode, selected index = row.
 func (d *Dashboard) ensureVenueSelectionVisible() {
-	if d.venueGridCols <= 0 {
-		return
-	}
-	selectedRow := d.selected / d.venueGridCols
+	selectedRow := d.selected
 	if selectedRow < d.venueScrollRow {
 		d.venueScrollRow = selectedRow
 	}

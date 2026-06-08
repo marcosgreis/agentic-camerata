@@ -331,8 +331,9 @@ func (d *Dashboard) renderVenuesBoxGrid() string {
 	numRows := (len(venues) + cols - 1) / cols
 	d.venueGridRows = numRows
 
-	// Each rendered row takes boxHeight + 2 (border) lines, plus 1 line gap between rows
-	rowRenderHeight := boxHeight + 2
+	// Each rendered row takes boxHeight + 2 (border) + 3 (gap newlines) lines
+	// But the last row doesn't need the trailing gap
+	rowRenderHeight := boxHeight + 2 + 2
 	// Available content height inside the panel (minus panel border top/bottom)
 	innerHeight := height - 2
 	if innerHeight < rowRenderHeight {
@@ -340,11 +341,9 @@ func (d *Dashboard) renderVenuesBoxGrid() string {
 	}
 
 	// How many rows fit on screen
-	// First row: rowRenderHeight. Each additional: 1 (gap) + rowRenderHeight.
-	visibleRows := 1
-	remaining := innerHeight - rowRenderHeight
-	if remaining > 0 {
-		visibleRows += remaining / (rowRenderHeight + 1)
+	visibleRows := innerHeight / rowRenderHeight
+	if visibleRows < 1 {
+		visibleRows = 1
 	}
 	if visibleRows > numRows {
 		visibleRows = numRows
@@ -352,8 +351,12 @@ func (d *Dashboard) renderVenuesBoxGrid() string {
 	d.venueVisibleRows = visibleRows
 
 	// Clamp scroll offset
-	if d.venueScrollRow > numRows-visibleRows {
-		d.venueScrollRow = numRows - visibleRows
+	maxScroll := numRows - visibleRows
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if d.venueScrollRow > maxScroll {
+		d.venueScrollRow = maxScroll
 	}
 	if d.venueScrollRow < 0 {
 		d.venueScrollRow = 0
@@ -379,18 +382,18 @@ func (d *Dashboard) renderVenuesBoxGrid() string {
 		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, rowBoxes...))
 	}
 
-	content := strings.Join(rows, "\n")
+	content := strings.Join(rows, "\n\n\n")
 
 	// Scroll indicator
 	canScrollUp := d.venueScrollRow > 0
 	canScrollDown := d.venueScrollRow+visibleRows < numRows
 	scrollHint := ""
 	if canScrollUp && canScrollDown {
-		scrollHint = fmt.Sprintf(" ↑↓ %d/%d", d.venueScrollRow+1, numRows)
+		scrollHint = fmt.Sprintf(" ↑↓ %d/%d", d.selected+1, numRows)
 	} else if canScrollUp {
-		scrollHint = fmt.Sprintf(" ↑ %d/%d", d.venueScrollRow+1, numRows)
+		scrollHint = fmt.Sprintf(" ↑ %d/%d", d.selected+1, numRows)
 	} else if canScrollDown {
-		scrollHint = fmt.Sprintf(" ↓ %d/%d", d.venueScrollRow+1, numRows)
+		scrollHint = fmt.Sprintf(" ↓ %d/%d", d.selected+1, numRows)
 	}
 
 	style := panelStyle.Width(width).Height(height)
@@ -405,80 +408,19 @@ func (d *Dashboard) renderVenuesBoxGrid() string {
 	return lipgloss.JoinVertical(lipgloss.Left, title, style.Render(content))
 }
 
-// venueGridDimensions calculates cols, boxWidth, boxHeight for a grid layout.
-// Box height is fixed (minVenueBoxHeight) so content is always readable.
-// If the grid doesn't fit vertically, the caller handles scrolling.
+// venueGridDimensions calculates cols, boxWidth, boxHeight for a list layout.
+// Always returns 1 column (one venue per row).
 func venueGridDimensions(count, availWidth, availHeight int) (cols, boxWidth, boxHeight int) {
-	const minBoxWidth = 10
 	const minBoxHeight = 5 // border(2) + name(1) + counts(1) + padding(1)
 
-	if count == 0 {
-		return 1, maxVenueBoxWidth, minBoxHeight
-	}
+	cols = 1
 
-	// Max columns that fit: each column needs minBoxWidth + 1 gap (except first)
-	maxCols := 1
-	if availWidth-4 >= minBoxWidth {
-		maxCols = (availWidth - 4 + 1) / (minBoxWidth + 1)
-	}
-	if maxCols < 1 {
-		maxCols = 1
-	}
-	if maxCols > count {
-		maxCols = count
-	}
-
-	// How many rows fit on screen with fixed box height
-	rowRenderHeight := minBoxHeight + 2 // box content height + border
-	maxVisibleRows := 1
-	rem := (availHeight - 2) - rowRenderHeight // first row
-	if rem > 0 {
-		maxVisibleRows += rem / (rowRenderHeight + 1) // subsequent rows + 1-line gap
-	}
-	if maxVisibleRows < 1 {
-		maxVisibleRows = 1
-	}
-
-	// Find column count that is roughly square but biased toward wider layouts.
-	// Among similarly-square options, prefer more columns over more rows.
-	bestCols := 1
-	bestScore := count * count * 100 // worst case
-	for c := 1; c <= maxCols; c++ {
-		r := (count + c - 1) / c
-		diff := c - r
-		if diff < 0 {
-			diff = -diff
-		}
-		// Base score: how far from square (lower is better)
-		score := diff * 10
-		// Bias toward wider: penalise extra rows more than extra columns.
-		// When cols < rows, add extra penalty to push toward wider.
-		if r > c {
-			score += (r - c) * 5
-		}
-		// Tie-break: fewer empty cells in last row
-		emptyCells := c*r - count
-		score += emptyCells
-		// Heavily penalise layouts that require scrolling
-		if r > maxVisibleRows {
-			score += (r - maxVisibleRows) * 100
-		}
-		if score < bestScore {
-			bestScore = score
-			bestCols = c
-		}
-	}
-	cols = bestCols
-
-	// Box width: divide available width among columns + 1-char gaps
-	// c columns with (c-1) gaps of 1 char
-	usableWidth := availWidth - 4
-	boxWidth = (usableWidth - (cols - 1)) / cols
+	boxWidth = availWidth - 4
 	if boxWidth > maxVenueBoxWidth {
 		boxWidth = maxVenueBoxWidth
 	}
-	if boxWidth < minBoxWidth {
-		boxWidth = minBoxWidth
+	if boxWidth < 10 {
+		boxWidth = 10
 	}
 
 	boxHeight = minBoxHeight
