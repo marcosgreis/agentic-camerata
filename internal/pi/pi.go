@@ -36,16 +36,16 @@ func (r *Runner) Run(ctx context.Context, opts agent.RunOptions) error {
 var opusVersioned = "claude-opus-4-6"
 
 var defaultEfforts = map[agent.CommandType]string{
-	agent.CommandNew:              "high",
-	agent.CommandResearch:         "max",
-	agent.CommandPlan:             "max",
+	agent.CommandNew:              "xhigh",
+	agent.CommandResearch:         "xhigh",
+	agent.CommandPlan:             "xhigh",
 	agent.CommandImplement:        "high",
 	agent.CommandFixTest:          "high",
 	agent.CommandFixLocalComments: "high",
 	agent.CommandFixPRBuild:       "high",
 	agent.CommandFixPRComments:    "high",
 	agent.CommandQuick:            "normal",
-	agent.CommandReview:           "max",
+	agent.CommandReview:           "xhigh",
 }
 
 // DefaultEffort returns the Pi-specific default effort for a command type.
@@ -53,7 +53,7 @@ func (r *Runner) DefaultEffort(cmd agent.CommandType) string {
 	if e, ok := defaultEfforts[cmd]; ok {
 		return e
 	}
-	return "max"
+	return "xhigh"
 }
 
 // defaultModels maps command types to the default model for Pi.
@@ -88,7 +88,7 @@ func (r *Runner) buildCommand(opts agent.RunOptions) *exec.Cmd {
 		effort = r.DefaultEffort(opts.Command)
 	}
 	if effort != "" {
-		args = append(args, "--effort", effort)
+		args = append(args, "--thinking", effort)
 	}
 
 	model := opts.Model
