@@ -30,6 +30,7 @@ type Venue struct {
 	TotalCount    int
 	PlanCount     int
 	ResearchCount int
+	OtherCount    int  // Count of .md files in thoughts/ excluding plans/research
 	Pinned        bool // true if this venue was explicitly pinned
 }
 
@@ -47,6 +48,7 @@ type DocumentType int
 const (
 	DocTypePlan DocumentType = iota
 	DocTypeResearch
+	DocTypeOther
 )
 
 // VenueItem represents a single item in the expanded venue list
@@ -93,10 +95,11 @@ func buildVenues(sessions []*db.Session, pinnedDirs []string) []Venue {
 		venues = append(venues, *v)
 	}
 
-	// Count plan and research files for each venue
+	// Count plan, research, and other files for each venue
 	for i := range venues {
 		venues[i].PlanCount = countMdFiles(filepath.Join(venues[i].Directory, "thoughts", "shared", "plans"))
 		venues[i].ResearchCount = countMdFiles(filepath.Join(venues[i].Directory, "thoughts", "shared", "research"))
+		venues[i].OtherCount = countOtherMdFiles(venues[i].Directory)
 	}
 
 	// Sort: pinned first, then running count desc, then total count desc, then directory asc
@@ -156,6 +159,11 @@ func buildVenueItems(venue *Venue, sessions []*db.Session) []VenueItem {
 		items = append(items, VenueItem{Type: VenueItemDocument, DocPath: path, DocType: DocTypeResearch})
 	}
 
+	// Add other documents (thoughts/ excluding plans/ and research/)
+	for _, path := range listOtherMdFiles(venue.Directory) {
+		items = append(items, VenueItem{Type: VenueItemDocument, DocPath: path, DocType: DocTypeOther})
+	}
+
 	return items
 }
 
@@ -189,6 +197,7 @@ func (d *Dashboard) renderVenueExpanded() string {
 	historyCount := 0
 	planCount := 0
 	researchCount := 0
+	otherCount := 0
 	for _, item := range d.expandedItems {
 		switch {
 		case item.Type == VenueItemSession && item.InRunning:
@@ -199,6 +208,8 @@ func (d *Dashboard) renderVenueExpanded() string {
 			planCount++
 		case item.Type == VenueItemDocument && item.DocType == DocTypeResearch:
 			researchCount++
+		case item.Type == VenueItemDocument && item.DocType == DocTypeOther:
+			otherCount++
 		}
 	}
 
@@ -228,6 +239,8 @@ func (d *Dashboard) renderVenueExpanded() string {
 			newSection = 2
 		case item.Type == VenueItemDocument && item.DocType == DocTypeResearch:
 			newSection = 3
+		case item.Type == VenueItemDocument && item.DocType == DocTypeOther:
+			newSection = 4
 		}
 
 		// Emit section header when entering a new section
@@ -252,6 +265,9 @@ func (d *Dashboard) renderVenueExpanded() string {
 				headerStyle = sectionVenuesHeader
 			case 3:
 				headerText = fmt.Sprintf("📜 RESEARCH (%d)", researchCount)
+				headerStyle = sectionVenuesHeader
+			case 4:
+				headerText = fmt.Sprintf("📄 OTHER (%d)", otherCount)
 				headerStyle = sectionVenuesHeader
 			}
 			content.WriteString(headerStyle.Width(listWidth - 4).Render(headerText))
@@ -468,6 +484,37 @@ func countMdFiles(dir string) int {
 	return count
 }
 
+// listOtherMdFiles returns .md files under thoughts/ excluding plans/ and research/
+func listOtherMdFiles(venueDir string) []string {
+	thoughtsDir := filepath.Join(venueDir, "thoughts")
+	plansDir := filepath.Join(venueDir, "thoughts", "shared", "plans")
+	researchDir := filepath.Join(venueDir, "thoughts", "shared", "research")
+
+	var files []string
+	filepath.Walk(thoughtsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			if path == plansDir || path == researchDir {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(info.Name(), ".md") {
+			files = append(files, path)
+		}
+		return nil
+	})
+	sort.Strings(files)
+	return files
+}
+
+// countOtherMdFiles counts .md files under thoughts/ excluding plans/ and research/
+func countOtherMdFiles(venueDir string) int {
+	return len(listOtherMdFiles(venueDir))
+}
+
 // renderVenueBox renders a single venue as a styled box
 func renderVenueBox(v Venue, width, height int, selected bool) string {
 	name := lastPathSegment(v.Directory)
@@ -514,8 +561,8 @@ func renderVenueBox(v Venue, width, height int, selected bool) string {
 	}
 
 	// Build counts line if any exist and there's vertical space
-	if hasCountsSpace && (v.PlanCount > 0 || v.ResearchCount > 0) {
-		countsLine := venueCountsLine(v.PlanCount, v.ResearchCount, innerWidth)
+	if hasCountsSpace && (v.PlanCount > 0 || v.ResearchCount > 0 || v.OtherCount > 0) {
+		countsLine := venueCountsLine(v.PlanCount, v.ResearchCount, v.OtherCount, innerWidth)
 		if countsLine != "" {
 			return style.Render(name + "\n" + dimStyle.Render(countsLine))
 		}
@@ -526,20 +573,27 @@ func renderVenueBox(v Venue, width, height int, selected bool) string {
 
 // venueCountsLine builds a counts string that fits within maxWidth.
 // Emoji widths: each emoji occupies ~2 columns in most terminals.
-// Format attempts in order: "📝 3 📜 2", "📝3 📜2", "📝3📜2", "3p 2r", "3p2r"
-func venueCountsLine(plans, research, maxWidth int) string {
-	if plans == 0 && research == 0 {
+// Format attempts in order: "📝 3 📜 2 📄 1", "📝3 📜2 📄1", etc.
+func venueCountsLine(plans, research, other, maxWidth int) string {
+	if plans == 0 && research == 0 && other == 0 {
 		return ""
 	}
 
-	// Build parts and try progressively more compact formats
 	type candidate struct {
 		text string
 	}
 
 	var candidates []candidate
 
-	if plans > 0 && research > 0 {
+	if plans > 0 && research > 0 && other > 0 {
+		candidates = append(candidates,
+			candidate{fmt.Sprintf("📝 %d 📜 %d 📄 %d", plans, research, other)},
+			candidate{fmt.Sprintf("📝%d 📜%d 📄%d", plans, research, other)},
+			candidate{fmt.Sprintf("📝%d📜%d📄%d", plans, research, other)},
+			candidate{fmt.Sprintf("%dp %dr %do", plans, research, other)},
+			candidate{fmt.Sprintf("%dp%dr%do", plans, research, other)},
+		)
+	} else if plans > 0 && research > 0 {
 		candidates = append(candidates,
 			candidate{fmt.Sprintf("📝 %d 📜 %d", plans, research)},
 			candidate{fmt.Sprintf("📝%d 📜%d", plans, research)},
@@ -547,29 +601,49 @@ func venueCountsLine(plans, research, maxWidth int) string {
 			candidate{fmt.Sprintf("%dp %dr", plans, research)},
 			candidate{fmt.Sprintf("%dp%dr", plans, research)},
 		)
+	} else if plans > 0 && other > 0 {
+		candidates = append(candidates,
+			candidate{fmt.Sprintf("📝 %d 📄 %d", plans, other)},
+			candidate{fmt.Sprintf("📝%d 📄%d", plans, other)},
+			candidate{fmt.Sprintf("📝%d📄%d", plans, other)},
+			candidate{fmt.Sprintf("%dp %do", plans, other)},
+			candidate{fmt.Sprintf("%dp%do", plans, other)},
+		)
+	} else if research > 0 && other > 0 {
+		candidates = append(candidates,
+			candidate{fmt.Sprintf("📜 %d 📄 %d", research, other)},
+			candidate{fmt.Sprintf("📜%d 📄%d", research, other)},
+			candidate{fmt.Sprintf("📜%d📄%d", research, other)},
+			candidate{fmt.Sprintf("%dr %do", research, other)},
+			candidate{fmt.Sprintf("%dr%do", research, other)},
+		)
 	} else if plans > 0 {
 		candidates = append(candidates,
 			candidate{fmt.Sprintf("📝 %d", plans)},
 			candidate{fmt.Sprintf("📝%d", plans)},
 			candidate{fmt.Sprintf("%dp", plans)},
 		)
-	} else {
+	} else if research > 0 {
 		candidates = append(candidates,
 			candidate{fmt.Sprintf("📜 %d", research)},
 			candidate{fmt.Sprintf("📜%d", research)},
 			candidate{fmt.Sprintf("%dr", research)},
 		)
+	} else {
+		candidates = append(candidates,
+			candidate{fmt.Sprintf("📄 %d", other)},
+			candidate{fmt.Sprintf("📄%d", other)},
+			candidate{fmt.Sprintf("%do", other)},
+		)
 	}
 
 	for _, c := range candidates {
-		// Estimate display width: each emoji is ~2 columns, rest is 1 per byte
 		w := displayWidth(c.text)
 		if w <= maxWidth {
 			return c.text
 		}
 	}
 
-	// Nothing fits
 	return ""
 }
 
