@@ -81,15 +81,12 @@ _cmt_completions() {
             ;;
         implement)
             case "$prev" in
-                -f|--files)
-                    COMPREPLY=($(compgen -f -- "$cur"))
-                    ;;
-                -d|--dirs)
+                -d|--dir)
                     COMPREPLY=($(compgen -d -- "$cur"))
                     ;;
                 *)
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "$file_opts $loop_opts" -- "$cur"))
+                        COMPREPLY=($(compgen -W "-d --dir $loop_opts" -- "$cur"))
                     else
                         # Complete with plan files
                         COMPREPLY=($(compgen -f -X '!*.md' -- "$cur"))

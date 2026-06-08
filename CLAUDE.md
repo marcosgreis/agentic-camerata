@@ -8,7 +8,7 @@ Terminal orchestrator for Claude AI coding sessions. Manages workflows (research
 cmt new "task"              # General session
 cmt research "topic"        # Read-only exploration
 cmt plan "feature"          # Design before implementing
-cmt implement [plan_file]   # Execute plan (fzf selector if no file)
+cmt implement [plan_file]   # Execute plan (fzf selector if no file; -d/--dir picks listing dir)
 cmt fix-test "test"              # Fix a failing test
 cmt fix-local-comments "issue"   # Investigate and fix issues
 cmt fix-pr-build <PR_LINK>       # Fix CI build for a PR
@@ -122,7 +122,7 @@ Default: `~/.config/cmt/sessions.db` (override: `-d` flag or `CMT_DB` env)
 - Database path supports `~` home directory expansion
 - WAL mode enabled for SQLite concurrency
 - Activity monitoring: session transitions between `waiting` (idle >1s) and `working` (output detected) states
-- File selection flags (`-f file`, `-d dir`, `-t`) available on most session commands via `FileFlags`
+- File selection flags (`-f file`, `-d dir`, `-t`) available on most session commands via `FileFlags`; the `implement` command does NOT take these prepend flags and instead uses `-d/--dir` to choose the plan-listing directory for the fzf selector (default `thoughts/shared/plans`)
 - Loop flags (`--loop <interval>`, `--loop-limit <n>`) available on session commands via `LoopFlags`; each iteration creates its own DB session with `loop_interval` set; dashboard shows "type (interval)" in the workflow column
 - Global flags: `-v` (verbose), `-a` (autonomous mode, skips permission prompts; also `CMT_AUTONOMOUS` env), `--agent` (backend: `pi` (default), `claude`, `codex`, `amp`; also `CMT_AGENT` env)
 - Comment tag for fix-local-comments defaults to `CMT` (override with `CMT_COMMENT_TAG` env)

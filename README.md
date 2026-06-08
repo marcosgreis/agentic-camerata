@@ -56,7 +56,8 @@ cmt plan "refactor the API layer"
 
 # Implement mode — select a plan file via fzf, then implement
 cmt implement
-cmt implement path/to/plan.md    # Or specify plan directly
+cmt implement path/to/plan.md       # Or specify plan directly
+cmt implement -d thoughts/myplans   # List plans from a custom directory
 
 # Fix a failing test
 cmt fix-test "TestUserAuth"
@@ -111,7 +112,7 @@ cmt dashboard
 
 - **Database:** `~/.config/cmt/sessions.db`
 - **Session logs:** `~/.config/cmt/output/{session_id}.log`
-- **Plan files:** `thoughts/shared/plans/*.md` (for `implement` command)
+- **Plan files:** `thoughts/shared/plans/*.md` (for `implement` command; override the listing directory with `-d/--dir`)
 
 ## Workflow Modes
 

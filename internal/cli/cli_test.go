@@ -43,6 +43,16 @@ func TestCLIParsing(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "implement with dir flag",
+			args:    []string{"implement", "-d", "some/dir"},
+			wantErr: false,
+		},
+		{
+			name:    "implement with long dir flag and plan",
+			args:    []string{"implement", "--dir", "some/dir", "plan.md"},
+			wantErr: false,
+		},
+		{
 			name:    "sessions command",
 			args:    []string{"sessions"},
 			wantErr: false,
@@ -129,6 +139,26 @@ func TestCLIDefaults(t *testing.T) {
 
 	if cli.Verbose != false {
 		t.Errorf("Verbose default = %v, want false", cli.Verbose)
+	}
+}
+
+func TestImplementDirDefault(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli,
+		kong.Name("cmt"),
+		kong.Exit(func(int) {}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create parser: %v", err)
+	}
+
+	_, err = parser.Parse([]string{"implement"})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	if cli.Implement.Dir != "thoughts/shared/plans" {
+		t.Errorf("Implement.Dir default = %v, want thoughts/shared/plans", cli.Implement.Dir)
 	}
 }
 

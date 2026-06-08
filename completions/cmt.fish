@@ -34,9 +34,9 @@ complete -c cmt -n __fish_use_subcommand -a dashboard -d 'Open the TUI dashboard
 complete -c cmt -n __fish_use_subcommand -a todo -d 'Manage todos'
 
 # File flags for commands that support them
-complete -c cmt -n '__fish_seen_subcommand_from new research plan implement review fix-test fix-local-comments fix-pr-build fix-pr-comments' -s f -d 'File path to prepend to prompt (repeatable)' -r -F
-complete -c cmt -n '__fish_seen_subcommand_from new research plan implement review fix-test fix-local-comments fix-pr-build fix-pr-comments' -s d -d 'Directory to open fzf file selector on (repeatable)' -r -a '(__fish_complete_directories)'
-complete -c cmt -n '__fish_seen_subcommand_from new research plan implement review fix-test fix-local-comments fix-pr-build fix-pr-comments' -s t -d 'Open fzf on thoughts/shared/ directory (repeatable)'
+complete -c cmt -n '__fish_seen_subcommand_from new research plan review fix-test fix-local-comments fix-pr-build fix-pr-comments' -s f -d 'File path to prepend to prompt (repeatable)' -r -F
+complete -c cmt -n '__fish_seen_subcommand_from new research plan review fix-test fix-local-comments fix-pr-build fix-pr-comments' -s d -d 'Directory to open fzf file selector on (repeatable)' -r -a '(__fish_complete_directories)'
+complete -c cmt -n '__fish_seen_subcommand_from new research plan review fix-test fix-local-comments fix-pr-build fix-pr-comments' -s t -d 'Open fzf on thoughts/shared/ directory (repeatable)'
 
 # Loop flags for commands that support them
 complete -c cmt -n '__fish_seen_subcommand_from new research plan implement fix-test fix-local-comments fix-pr-build fix-pr-comments' -l loop -d 'Re-run on a recurring interval (e.g. 5m, 1h)' -r -a '1m 5m 10m 30m 1h 2h'
@@ -54,6 +54,7 @@ complete -c cmt -n '__fish_seen_subcommand_from play' -F -d 'Playbook file'
 complete -c cmt -n '__fish_seen_subcommand_from play' -s r -l resume -d 'Resume an abandoned play session' -f -a '(__cmt_sessions)'
 
 # implement command - complete with markdown files for plan argument
+complete -c cmt -n '__fish_seen_subcommand_from implement' -s d -l dir -d 'Directory to list plans from' -r -a '(__fish_complete_directories)'
 complete -c cmt -n '__fish_seen_subcommand_from implement' -a '(__fish_complete_suffix .md)' -d 'Plan file'
 
 # jump command - complete with session IDs

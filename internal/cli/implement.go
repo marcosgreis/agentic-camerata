@@ -12,8 +12,8 @@ import (
 
 // ImplementCmd starts an implementation-focused agent session
 type ImplementCmd struct {
-	FileFlags
 	LoopFlags
+	Dir  string `short:"d" name:"dir" default:"thoughts/shared/plans" help:"Directory to list plans from in the fzf selector"`
 	Plan string `arg:"" optional:"" help:"Path to plan file (uses fzf selector if not provided)"`
 }
 
@@ -22,7 +22,7 @@ func (c *ImplementCmd) Run(cli *CLI) error {
 	planPath := c.Plan
 	if planPath == "" {
 		var err error
-		planPath, err = plans.SelectPlanFile()
+		planPath, err = plans.SelectMarkdownFile(c.Dir)
 		if err != nil {
 			return err
 		}
@@ -32,12 +32,7 @@ func (c *ImplementCmd) Run(cli *CLI) error {
 		return fmt.Errorf("plan file not found: %s", planPath)
 	}
 
-	files, err := c.FileFlags.ResolveFiles()
-	if err != nil {
-		return err
-	}
-
-	task := PrependFilesToTask(files, planPath)
+	task := planPath
 
 	ag, err := newAgent(cli.Agent, cli.Database())
 	if err != nil {

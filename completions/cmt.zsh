@@ -83,7 +83,7 @@ _cmt() {
                     ;;
                 implement)
                     _arguments \
-                        $file_opts \
+                        '(-d --dir)'{-d,--dir}'[Directory to list plans from]:directory:_files -/' \
                         $loop_opts \
                         '1:plan:_files -g "*.md"'
                     ;;
