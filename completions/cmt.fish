@@ -32,11 +32,13 @@ complete -c cmt -n __fish_use_subcommand -a sessions -d 'List all sessions'
 complete -c cmt -n __fish_use_subcommand -a jump -d 'Jump to a session\'s tmux location'
 complete -c cmt -n __fish_use_subcommand -a dashboard -d 'Open the TUI dashboard'
 complete -c cmt -n __fish_use_subcommand -a todo -d 'Manage todos'
+complete -c cmt -n __fish_use_subcommand -a catalog -d 'Store and reuse research files across projects'
 
 # File flags for commands that support them
 complete -c cmt -n '__fish_seen_subcommand_from new research plan review fix-test fix-local-comments fix-pr-build fix-pr-comments' -s f -d 'File path to prepend to prompt (repeatable)' -r -F
 complete -c cmt -n '__fish_seen_subcommand_from new research plan review fix-test fix-local-comments fix-pr-build fix-pr-comments' -s d -d 'Directory to open fzf file selector on (repeatable)' -r -a '(__fish_complete_directories)'
 complete -c cmt -n '__fish_seen_subcommand_from new research plan review fix-test fix-local-comments fix-pr-build fix-pr-comments' -s t -d 'Open fzf on thoughts/shared/ directory (repeatable)'
+complete -c cmt -n '__fish_seen_subcommand_from new research plan review fix-test fix-local-comments fix-pr-build fix-pr-comments' -s c -d 'Open fzf on the catalog directory (repeatable)'
 
 # Loop flags for commands that support them
 complete -c cmt -n '__fish_seen_subcommand_from new research plan implement fix-test fix-local-comments fix-pr-build fix-pr-comments' -l loop -d 'Re-run on a recurring interval (e.g. 5m, 1h)' -r -a '1m 5m 10m 30m 1h 2h'
@@ -69,6 +71,17 @@ complete -c cmt -n '__fish_seen_subcommand_from sessions' -s n -d 'Limit number 
 complete -c cmt -n '__fish_seen_subcommand_from dashboard' -l venues -d 'Open directly to venues view'
 complete -c cmt -n '__fish_seen_subcommand_from dashboard' -l todos -d 'Open directly to todos view'
 complete -c cmt -n '__fish_seen_subcommand_from dashboard' -l debug -d 'Render dashboard to stdout and exit (for debugging)'
+
+# catalog subcommands
+complete -c cmt -n '__fish_seen_subcommand_from catalog; and not __fish_seen_subcommand_from save list rm show pick' -a save -d 'Copy a .md file into the catalog'
+complete -c cmt -n '__fish_seen_subcommand_from catalog; and not __fish_seen_subcommand_from save list rm show pick' -a list -d 'List cataloged files'
+complete -c cmt -n '__fish_seen_subcommand_from catalog; and not __fish_seen_subcommand_from save list rm show pick' -a rm -d 'Remove a cataloged file'
+complete -c cmt -n '__fish_seen_subcommand_from catalog; and not __fish_seen_subcommand_from save list rm show pick' -a show -d 'Print a cataloged file\'s contents'
+complete -c cmt -n '__fish_seen_subcommand_from catalog; and not __fish_seen_subcommand_from save list rm show pick' -a pick -d 'Open fzf and print the chosen catalog path'
+
+# catalog save options
+complete -c cmt -n '__fish_seen_subcommand_from catalog; and __fish_seen_subcommand_from save' -s F -l force -d 'Overwrite if the catalog entry already exists'
+complete -c cmt -n '__fish_seen_subcommand_from catalog; and __fish_seen_subcommand_from save' -a '(__fish_complete_suffix .md)' -d 'Markdown file'
 
 # todo subcommands
 complete -c cmt -n '__fish_seen_subcommand_from todo; and not __fish_seen_subcommand_from add list search done undone update rm' -a add -d 'Add a new todo'

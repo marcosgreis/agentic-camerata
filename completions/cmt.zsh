@@ -25,6 +25,7 @@ _cmt() {
         'jump:Jump to a session'\''s tmux location'
         'dashboard:Open the TUI dashboard'
         'todo:Manage todos'
+        'catalog:Store and reuse research files across projects'
     )
 
     local -a global_opts
@@ -42,6 +43,7 @@ _cmt() {
         '*-f[File path to prepend to prompt (repeatable)]:file:_files'
         '*-d[Directory to open fzf file selector on (repeatable)]:directory:_files -/'
         '-t[Open fzf on thoughts/shared/ directory (repeatable)]'
+        '*-c[Open fzf on the catalog directory (repeatable)]'
     )
 
     local -a loop_opts
@@ -144,6 +146,37 @@ _cmt() {
                         '--venues[Open directly to venues view]' \
                         '--todos[Open directly to todos view]' \
                         '--debug[Render dashboard to stdout and exit (for debugging)]'
+                    ;;
+                catalog)
+                    local -a catalog_commands
+                    catalog_commands=(
+                        'save:Copy a .md file into the catalog'
+                        'list:List cataloged files'
+                        'rm:Remove a cataloged file'
+                        'show:Print a cataloged file'\''s contents'
+                        'pick:Open fzf and print the chosen catalog path'
+                    )
+                    _arguments -C \
+                        '1:catalog command:->catalog_cmd' \
+                        '*::catalog arg:->catalog_args'
+                    case $state in
+                        catalog_cmd)
+                            _describe 'catalog command' catalog_commands
+                            ;;
+                        catalog_args)
+                            case $words[1] in
+                                save)
+                                    _arguments \
+                                        '(-F --force)'{-F,--force}'[Overwrite if the catalog entry already exists]' \
+                                        '1:file:_files -g "*.md"' \
+                                        '2:name:'
+                                    ;;
+                                rm|show)
+                                    _arguments '1:name:'
+                                    ;;
+                            esac
+                            ;;
+                    esac
                     ;;
                 todo)
                     local -a todo_commands

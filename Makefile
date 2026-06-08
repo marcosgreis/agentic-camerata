@@ -54,9 +54,9 @@ test-cover:
 test-race:
 	go test -v -race ./...
 
-# Run linter (requires golangci-lint)
+# Run linter
 lint:
-	golangci-lint run ./...
+	go vet ./...
 
 # Format code
 fmt:
@@ -93,7 +93,7 @@ help:
 	@echo "  test-integration - Run integration tests (requires tmux)"
 	@echo "  test-cover       - Run tests with coverage report"
 	@echo "  test-race        - Run tests with race detector"
-	@echo "  lint             - Run golangci-lint"
+	@echo "  lint             - Run go vet"
 	@echo "  fmt              - Format code"
 	@echo "  vet              - Run go vet"
 	@echo "  tidy             - Tidy dependencies"

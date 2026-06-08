@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/agentic-camerata/cmt/internal/catalog"
 	"github.com/agentic-camerata/cmt/internal/plans"
 )
 
@@ -13,6 +14,7 @@ type FileFlags struct {
 	Files    []string `short:"f" help:"File path to prepend to prompt (repeatable)" optional:""`
 	Dirs     []string `short:"d" help:"Directory to open fzf file selector on (repeatable)" optional:""`
 	Thoughts int      `short:"t" help:"Open fzf on thoughts/shared/ directory (repeatable)" type:"counter" optional:""`
+	Catalog  int      `short:"c" help:"Open fzf on the catalog directory (repeatable)" type:"counter" optional:""`
 }
 
 // ResolveFiles processes all file flags and returns the list of file paths
@@ -40,6 +42,15 @@ func (f *FileFlags) ResolveFiles() ([]string, error) {
 	// Process -t flags (fzf on thoughts/shared/ directory)
 	for i := 0; i < f.Thoughts; i++ {
 		path, err := plans.SelectMarkdownFile(plans.DefaultDir)
+		if err != nil {
+			return nil, err
+		}
+		resolved = append(resolved, path)
+	}
+
+	// Process -c flags (fzf on the catalog directory)
+	for i := 0; i < f.Catalog; i++ {
+		path, err := catalog.Select()
 		if err != nil {
 			return nil, err
 		}

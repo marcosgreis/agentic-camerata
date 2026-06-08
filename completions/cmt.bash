@@ -7,9 +7,9 @@ _cmt_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    local commands="new research plan implement review fix-test fix-local-comments fix-pr-build fix-pr-comments quick play sessions jump dashboard todo"
+    local commands="new research plan implement review fix-test fix-local-comments fix-pr-build fix-pr-comments quick play sessions jump dashboard todo catalog"
     local global_opts="-d --db -v --verbose -a --autonomous -h --help --model --agent"
-    local file_opts="-f --files -d --dirs -t --thoughts"
+    local file_opts="-f --files -d --dirs -t --thoughts -c --catalog"
     local loop_opts="--loop --loop-limit"
 
     # Handle global flag value completions before command-specific
@@ -219,6 +219,38 @@ _cmt_completions() {
             if [[ "$cur" == -* ]]; then
                 COMPREPLY=($(compgen -W "--venues --todos --debug" -- "$cur"))
             fi
+            ;;
+        catalog)
+            local catalog_commands="save list rm show pick"
+            case "${COMP_WORDS[2]}" in
+                save)
+                    case "$prev" in
+                        save)
+                            COMPREPLY=($(compgen -f -X '!*.md' -- "$cur"))
+                            ;;
+                        *)
+                            if [[ "$cur" == -* ]]; then
+                                COMPREPLY=($(compgen -W "-F --force" -- "$cur"))
+                            else
+                                COMPREPLY=($(compgen -f -X '!*.md' -- "$cur"))
+                            fi
+                            ;;
+                    esac
+                    ;;
+                rm|show)
+                    local names
+                    names=$(cmt catalog list 2>/dev/null | awk '{print $1}')
+                    COMPREPLY=($(compgen -W "$names" -- "$cur"))
+                    ;;
+                list|pick)
+                    COMPREPLY=()
+                    ;;
+                *)
+                    if [[ $COMP_CWORD -eq 2 ]]; then
+                        COMPREPLY=($(compgen -W "$catalog_commands" -- "$cur"))
+                    fi
+                    ;;
+            esac
             ;;
         todo)
             local todo_commands="add list search done undone update rm"

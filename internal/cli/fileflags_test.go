@@ -46,6 +46,17 @@ func TestFileFlags_ResolveFiles_DirectFiles(t *testing.T) {
 	}
 }
 
+func TestFileFlags_ResolveFiles_CatalogZero(t *testing.T) {
+	ff := FileFlags{Catalog: 0}
+	result, err := ff.ResolveFiles()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("expected empty slice, got %v", result)
+	}
+}
+
 func TestFileFlags_ResolveFiles_NonExistentFile(t *testing.T) {
 	ff := FileFlags{Files: []string{"/nonexistent/path/to/file.md"}}
 	_, err := ff.ResolveFiles()

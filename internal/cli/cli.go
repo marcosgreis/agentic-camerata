@@ -23,6 +23,7 @@ type CLI struct {
 	Dashboard  DashboardCmd  `cmd:"" help:"Open the TUI dashboard"`
 	Todo       TodoCmd       `cmd:"" help:"Manage todos"`
 	Venue      VenueCmd      `cmd:"" help:"Manage pinned venues"`
+	Catalog    CatalogCmd    `cmd:"" help:"Store and reuse research files across projects"`
 
 	// Global flags
 	DB         string `help:"Database path" default:"~/.config/cmt/sessions.db" env:"CMT_DB" optional:""`

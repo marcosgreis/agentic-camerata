@@ -18,6 +18,8 @@ cmt play playbook.md        # Run multi-phase playbook workflow
 cmt jump [id]               # Navigate to session's tmux location
 cmt sessions [-s status]    # List sessions
 cmt dashboard               # Interactive TUI
+cmt catalog save [file] [name]   # Store a .md file (use -f/-d/-t/-c picker if no file)
+cmt catalog list/show/rm/pick    # Manage cataloged files
 ```
 
 ## Project Structure
@@ -40,7 +42,10 @@ internal/
     fixprbuild.go            # Fix PR CI build workflow
     fixprcomments.go         # Address unresolved PR comments workflow
     play.go                  # Multi-phase playbook workflow
-    fileflags.go             # -f/-d/-t file selection flags shared across commands
+    catalog.go               # Catalog command (save/list/rm/show/pick)
+    fileflags.go             # -f/-d/-t/-c file selection flags shared across commands
+  catalog/
+    catalog.go               # Catalog filesystem store (project-independent .md files)
   claude/
     claude.go                # Runner - session execution, PTY management, activity monitoring
     prompts.go               # CommandType and prompt prefix mappings
@@ -113,6 +118,7 @@ Default: `~/.config/cmt/sessions.db` (override: `-d` flag or `CMT_DB` env)
 - **Session logs:** `~/.config/cmt/output/{session_id}.log`
 - **Plan files:** `thoughts/shared/plans/*.md`
 - **Research files:** `thoughts/shared/research/*.md`
+- **Catalog files:** `~/.agentic-camerata/catalog/*.md` (override with `CMT_CATALOG_DIR`)
 
 ## Conventions
 
@@ -122,7 +128,7 @@ Default: `~/.config/cmt/sessions.db` (override: `-d` flag or `CMT_DB` env)
 - Database path supports `~` home directory expansion
 - WAL mode enabled for SQLite concurrency
 - Activity monitoring: session transitions between `waiting` (idle >1s) and `working` (output detected) states
-- File selection flags (`-f file`, `-d dir`, `-t`) available on most session commands via `FileFlags`; the `implement` command does NOT take these prepend flags and instead uses `-d/--dir` to choose the plan-listing directory for the fzf selector (default `thoughts/shared/plans`)
+- File selection flags (`-f file`, `-d dir`, `-t`, `-c`) available on most session commands via `FileFlags`; `-c` opens an fzf picker on the catalog directory and is repeatable like `-t`; the `implement` command does NOT take these prepend flags and instead uses `-d/--dir` to choose the plan-listing directory for the fzf selector (default `thoughts/shared/plans`)
 - Loop flags (`--loop <interval>`, `--loop-limit <n>`) available on session commands via `LoopFlags`; each iteration creates its own DB session with `loop_interval` set; dashboard shows "type (interval)" in the workflow column
 - Global flags: `-v` (verbose), `-a` (autonomous mode, skips permission prompts; also `CMT_AUTONOMOUS` env), `--agent` (backend: `pi` (default), `claude`, `codex`, `amp`; also `CMT_AGENT` env)
 - Comment tag for fix-local-comments defaults to `CMT` (override with `CMT_COMMENT_TAG` env)

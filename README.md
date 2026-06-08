@@ -69,6 +69,38 @@ cmt fix-local-comments "authentication bug"
 cmt quick "what does this function do?"
 ```
 
+Most session commands accept file-selection flags that prepend files to the
+prompt: `-f <file>` (direct path), `-d <dir>` (fzf on a directory), `-t` (fzf on
+`thoughts/shared/`), and `-c` (fzf on the catalog). All are repeatable.
+
+### Catalog
+
+The catalog is a shared, project-independent store of reusable research `.md`
+files. It lives at `~/.agentic-camerata/catalog` (override with
+`CMT_CATALOG_DIR`) and is purely filesystem-based (no database).
+
+```bash
+# Copy a .md file into the catalog (optionally under a custom name)
+cmt catalog save thoughts/shared/research/auth.md
+cmt catalog save thoughts/shared/research/auth.md mynote
+cmt catalog save thoughts/shared/research/auth.md mynote -F   # overwrite
+
+# List cataloged files (name, size, modified date; newest first)
+cmt catalog list
+
+# Print a cataloged file's contents
+cmt catalog show mynote
+
+# Remove a cataloged file
+cmt catalog rm mynote
+
+# Open fzf and print the chosen file's absolute path (scriptable)
+cmt catalog pick
+```
+
+Use `-c` on any session command to pick a catalog file and prepend it to the
+prompt, e.g. `cmt plan -c "design the new flow"`.
+
 ### Session Management
 
 ```bash
@@ -107,12 +139,14 @@ cmt dashboard
 |--------|------|-----|---------|
 | Database | `-d`, `--db` | `CMT_DB` | `~/.config/cmt/sessions.db` |
 | Verbose | `-v` | — | `false` |
+| Catalog dir | — | `CMT_CATALOG_DIR` | `~/.agentic-camerata/catalog` |
 
 ### Directories
 
 - **Database:** `~/.config/cmt/sessions.db`
 - **Session logs:** `~/.config/cmt/output/{session_id}.log`
 - **Plan files:** `thoughts/shared/plans/*.md` (for `implement` command; override the listing directory with `-d/--dir`)
+- **Catalog files:** `~/.agentic-camerata/catalog/*.md` (override with `CMT_CATALOG_DIR`)
 
 ## Workflow Modes
 
@@ -169,6 +203,9 @@ internal/
     fix_local_comments.go    # Investigate and fix issues
     fixprbuild.go            # Fix PR CI build workflow
     fixprcomments.go         # Address unresolved PR comments workflow
+    catalog.go               # Catalog command (save/list/rm/show/pick)
+  catalog/
+    catalog.go               # Catalog filesystem store
   claude/
     claude.go                # Session runner, PTY management
     prompts.go               # Workflow prompt prefixes
