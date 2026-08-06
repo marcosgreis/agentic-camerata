@@ -98,11 +98,15 @@ complete -c cmt -n '__fish_seen_subcommand_from add' -s c -l channel -d 'Channel
 complete -c cmt -n '__fish_seen_subcommand_from add' -s f -l sender -d 'Sender' -r
 complete -c cmt -n '__fish_seen_subcommand_from add' -s u -l url -d 'URL' -r
 complete -c cmt -n '__fish_seen_subcommand_from add' -s d -l date -d 'Date (YYYY-MM-DD)' -r
+complete -c cmt -n '__fish_seen_subcommand_from add' -s D -l due -d 'Due date (YYYY-MM-DD)' -r
 complete -c cmt -n '__fish_seen_subcommand_from add' -s k -l key -d 'Idempotency key for deduplication' -r
 complete -c cmt -n '__fish_seen_subcommand_from add' -s m -l full-message -d 'Full message text' -r
 
 # todo list options
 complete -c cmt -n '__fish_seen_subcommand_from list' -s s -l status -d 'Filter by status' -r -a 'todo done deleted all'
+complete -c cmt -n '__fish_seen_subcommand_from list' -l overdue -d 'Only overdue todos (implies --status todo)'
+complete -c cmt -n '__fish_seen_subcommand_from list' -l due-before -d 'Only todos due before DATE (YYYY-MM-DD)' -r
+complete -c cmt -n '__fish_seen_subcommand_from list' -l sort-due -d 'Sort by due date ascending (nulls last)'
 
 # todo search options
 complete -c cmt -n '__fish_seen_subcommand_from search' -l id -d 'Filter by ID' -r
@@ -112,6 +116,9 @@ complete -c cmt -n '__fish_seen_subcommand_from search' -s u -l url -d 'Filter b
 complete -c cmt -n '__fish_seen_subcommand_from search' -s f -l sender -d 'Filter by sender' -r
 complete -c cmt -n '__fish_seen_subcommand_from search' -l source -d 'Filter by source' -r
 complete -c cmt -n '__fish_seen_subcommand_from search' -s d -l include-deleted -d 'Include soft-deleted todos'
+complete -c cmt -n '__fish_seen_subcommand_from search' -l overdue -d 'Only overdue todos (implies --status todo)'
+complete -c cmt -n '__fish_seen_subcommand_from search' -l due-before -d 'Only todos due before DATE (YYYY-MM-DD)' -r
+complete -c cmt -n '__fish_seen_subcommand_from search' -l sort-due -d 'Sort by due date ascending (nulls last)'
 
 # todo update options
 complete -c cmt -n '__fish_seen_subcommand_from update' -s S -l summary -d 'New summary' -r
@@ -120,4 +127,5 @@ complete -c cmt -n '__fish_seen_subcommand_from update' -s c -l channel -d 'Chan
 complete -c cmt -n '__fish_seen_subcommand_from update' -s f -l sender -d 'Sender' -r
 complete -c cmt -n '__fish_seen_subcommand_from update' -s u -l url -d 'URL' -r
 complete -c cmt -n '__fish_seen_subcommand_from update' -s d -l date -d 'Date (YYYY-MM-DD)' -r
+complete -c cmt -n '__fish_seen_subcommand_from update' -s D -l due -d 'Due date (YYYY-MM-DD); empty to clear' -r
 complete -c cmt -n '__fish_seen_subcommand_from update' -s m -l full-message -d 'Full message text' -r

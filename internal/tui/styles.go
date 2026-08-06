@@ -147,6 +147,11 @@ var (
 	todoStatusDone = lipgloss.NewStyle().
 			Foreground(colorMuted)
 
+	// Overdue todo style (red, bold)
+	todoOverdue = lipgloss.NewStyle().
+			Foreground(colorError).
+			Bold(true)
+
 	sectionTodoHeader = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#FEF3C7")).

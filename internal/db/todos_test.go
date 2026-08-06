@@ -17,7 +17,7 @@ func openTestDB(t *testing.T) *DB {
 	return db
 }
 
-func strp(s string) *string { return &s }
+func strp(s string) *string        { return &s }
 func timep(t time.Time) *time.Time { return &t }
 
 func TestTodoCRUD(t *testing.T) {
@@ -33,6 +33,7 @@ func TestTodoCRUD(t *testing.T) {
 			Channel: strp("#eng"),
 			Sender:  strp("alice"),
 			Date:    timep(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)),
+			DueDate: timep(time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)),
 		}
 
 		if err := db.CreateTodo(todo); err != nil {
@@ -70,6 +71,11 @@ func TestTodoCRUD(t *testing.T) {
 		if got.Date == nil {
 			t.Error("Date is nil, want non-nil")
 		}
+		if got.DueDate == nil {
+			t.Error("DueDate is nil, want non-nil")
+		} else if !got.DueDate.Equal(*todo.DueDate) {
+			t.Errorf("DueDate = %v, want %v", got.DueDate, todo.DueDate)
+		}
 	})
 
 	t.Run("get non-existent todo returns nil", func(t *testing.T) {
@@ -97,7 +103,7 @@ func TestTodoCRUD(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetTodo() error = %v", err)
 		}
-		if got.Source != nil || got.URL != nil || got.Channel != nil || got.Sender != nil || got.Date != nil {
+		if got.Source != nil || got.URL != nil || got.Channel != nil || got.Sender != nil || got.Date != nil || got.DueDate != nil {
 			t.Error("expected all nullable fields to be nil")
 		}
 	})
@@ -116,6 +122,7 @@ func TestTodoCRUD(t *testing.T) {
 		todo.Status = TodoStatusDone
 		todo.Summary = "Updated"
 		todo.Source = strp("slack")
+		todo.DueDate = timep(time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC))
 		if err := db.UpdateTodo(todo); err != nil {
 			t.Fatalf("UpdateTodo() error = %v", err)
 		}
@@ -132,6 +139,23 @@ func TestTodoCRUD(t *testing.T) {
 		}
 		if got.Source == nil || *got.Source != "slack" {
 			t.Errorf("Source = %v, want %q", got.Source, "slack")
+		}
+		if got.DueDate == nil {
+			t.Error("DueDate is nil after update, want non-nil")
+		}
+
+		// Verify clearing DueDate works (guards UpdateTodo SET clause —
+		// prevents done/undone toggles from accidentally nulling it)
+		todo.DueDate = nil
+		if err := db.UpdateTodo(todo); err != nil {
+			t.Fatalf("UpdateTodo() (clear DueDate) error = %v", err)
+		}
+		got, err = db.GetTodo(todo.ID)
+		if err != nil {
+			t.Fatalf("GetTodo() after DueDate clear error = %v", err)
+		}
+		if got.DueDate != nil {
+			t.Error("DueDate should be nil after explicit clear")
 		}
 	})
 
@@ -527,6 +551,110 @@ func TestListTodos(t *testing.T) {
 		}
 		if len(done) != 1 || done[0].Summary != "Done" {
 			t.Errorf("ListTodos(done) = %v, want 1 done item", done)
+		}
+	})
+}
+
+func TestDueDateFilters(t *testing.T) {
+	db := openTestDB(t)
+
+	now := time.Now().UTC()
+	todayCutoff := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	yesterday := todayCutoff.AddDate(0, 0, -1)
+	tomorrow := todayCutoff.AddDate(0, 0, 1)
+	nextWeek := todayCutoff.AddDate(0, 0, 7)
+
+	// Seed: overdue pending, future pending, no-due pending, done+overdue (fix #3), deleted
+	overdueItem := &Todo{ID: "due00001", Status: TodoStatusTodo, Summary: "Overdue", DueDate: timep(yesterday)}
+	futureItem := &Todo{ID: "due00002", Status: TodoStatusTodo, Summary: "Future", DueDate: timep(tomorrow)}
+	noDueItem := &Todo{ID: "due00003", Status: TodoStatusTodo, Summary: "No due date"}
+	doneOverdue := &Todo{ID: "due00004", Status: TodoStatusDone, Summary: "Done but overdue", DueDate: timep(yesterday)}
+	deletedItem := &Todo{ID: "due00005", Status: TodoStatusTodo, Summary: "Deleted"}
+
+	for _, todo := range []*Todo{overdueItem, futureItem, noDueItem, doneOverdue, deletedItem} {
+		if err := db.CreateTodo(todo); err != nil {
+			t.Fatalf("CreateTodo(%s) error = %v", todo.ID, err)
+		}
+	}
+	if err := db.DeleteTodo(deletedItem.ID); err != nil {
+		t.Fatalf("DeleteTodo() error = %v", err)
+	}
+
+	t.Run("DueBefore cutoff returns items with due_date before cutoff (all statuses)", func(t *testing.T) {
+		results, err := db.SearchTodos(TodoFilter{DueBefore: &todayCutoff})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		// overdueItem (pending, yesterday) + doneOverdue (done, yesterday) = 2
+		if len(results) != 2 {
+			t.Errorf("SearchTodos(DueBefore=today) = %d results, want 2", len(results))
+		}
+	})
+
+	t.Run("DueBefore with status=todo excludes done overdue item (proves --overdue pending-only semantics)", func(t *testing.T) {
+		s := TodoStatusTodo
+		results, err := db.SearchTodos(TodoFilter{DueBefore: &todayCutoff, Status: &s})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		if len(results) != 1 {
+			t.Errorf("SearchTodos(DueBefore+todo) = %d results, want 1 (pending overdue only)", len(results))
+		}
+		if len(results) == 1 && results[0].ID != overdueItem.ID {
+			t.Errorf("SearchTodos(DueBefore+todo) returned %q, want %q", results[0].ID, overdueItem.ID)
+		}
+	})
+
+	t.Run("DueBefore future cutoff includes overdue and near-future items", func(t *testing.T) {
+		results, err := db.SearchTodos(TodoFilter{DueBefore: &nextWeek})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		// overdueItem (yesterday<nextWeek) + doneOverdue (yesterday<nextWeek) + futureItem (tomorrow<nextWeek) = 3
+		if len(results) != 3 {
+			t.Errorf("SearchTodos(DueBefore=nextWeek) = %d results, want 3", len(results))
+		}
+	})
+
+	t.Run("SortDue orders by due_date ascending nulls last", func(t *testing.T) {
+		results, err := db.SearchTodos(TodoFilter{SortDue: true})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		// 4 non-deleted: overdueItem, futureItem, noDueItem, doneOverdue
+		if len(results) != 4 {
+			t.Errorf("SearchTodos(SortDue) = %d results, want 4", len(results))
+			return
+		}
+		// Last item must be the one with nil DueDate (nulls last)
+		if results[len(results)-1].DueDate != nil {
+			t.Error("SortDue: last item should have nil DueDate (nulls last)")
+		}
+		// All non-nil due dates (first 3 items) must be in ascending order.
+		// results[0] = yesterday, results[1] = yesterday (equal), results[2] = tomorrow.
+		for i := 0; i < len(results)-2; i++ {
+			if results[i].DueDate == nil {
+				t.Errorf("SortDue: results[%d].DueDate is nil, want non-nil (nulls-last means nulls come after)", i)
+				break
+			}
+			if results[i+1].DueDate == nil {
+				t.Errorf("SortDue: results[%d].DueDate is nil, want non-nil (nulls-last means nulls come after)", i+1)
+				break
+			}
+			if results[i].DueDate.After(*results[i+1].DueDate) {
+				t.Errorf("SortDue: results[%d].DueDate (%v) is after results[%d].DueDate (%v), want ascending",
+					i, results[i].DueDate, i+1, results[i+1].DueDate)
+			}
+		}
+	})
+
+	t.Run("OnlyDeleted returns only soft-deleted rows", func(t *testing.T) {
+		results, err := db.SearchTodos(TodoFilter{OnlyDeleted: true})
+		if err != nil {
+			t.Fatalf("SearchTodos() error = %v", err)
+		}
+		if len(results) != 1 || results[0].ID != deletedItem.ID {
+			t.Errorf("SearchTodos(OnlyDeleted) = %d results, want 1 with ID %q", len(results), deletedItem.ID)
 		}
 	})
 }

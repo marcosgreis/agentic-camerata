@@ -205,13 +205,17 @@ _cmt() {
                                         '(-f --sender)'{-f,--sender}'[Sender]:sender:' \
                                         '(-u --url)'{-u,--url}'[URL]:url:' \
                                         '(-d --date)'{-d,--date}'[Date (YYYY-MM-DD)]:date:' \
+                                        '(-D --due)'{-D,--due}'[Due date (YYYY-MM-DD)]:due:' \
                                         '(-k --key)'{-k,--key}'[Idempotency key for deduplication]:key:' \
                                         '(-m --full-message)'{-m,--full-message}'[Full message text]:message:' \
                                         '1:summary:'
                                     ;;
                                 list)
                                     _arguments \
-                                        '(-s --status)'{-s,--status}'[Filter by status]:status:(todo done deleted all)'
+                                        '(-s --status)'{-s,--status}'[Filter by status]:status:(todo done deleted all)' \
+                                        '--overdue[Only overdue todos (implies --status todo)]' \
+                                        '--due-before[Only todos due before DATE (YYYY-MM-DD)]:date:' \
+                                        '--sort-due[Sort by due date ascending (nulls last)]'
                                     ;;
                                 search)
                                     _arguments \
@@ -221,7 +225,10 @@ _cmt() {
                                         '(-u --url)'{-u,--url}'[Filter by URL]:url:' \
                                         '(-f --sender)'{-f,--sender}'[Filter by sender]:sender:' \
                                         '--source[Filter by source]:source:' \
-                                        '(-d --include-deleted)'{-d,--include-deleted}'[Include soft-deleted todos]'
+                                        '(-d --include-deleted)'{-d,--include-deleted}'[Include soft-deleted todos]' \
+                                        '--overdue[Only overdue todos (implies --status todo)]' \
+                                        '--due-before[Only todos due before DATE (YYYY-MM-DD)]:date:' \
+                                        '--sort-due[Sort by due date ascending (nulls last)]'
                                     ;;
                                 done|undone|rm)
                                     _arguments '1:todo ID:'
@@ -234,6 +241,7 @@ _cmt() {
                                         '(-f --sender)'{-f,--sender}'[Sender]:sender:' \
                                         '(-u --url)'{-u,--url}'[URL]:url:' \
                                         '(-d --date)'{-d,--date}'[Date (YYYY-MM-DD)]:date:' \
+                                        '(-D --due)'{-D,--due}'[Due date (YYYY-MM-DD); empty to clear]:due:' \
                                         '(-m --full-message)'{-m,--full-message}'[Full message text]:message:' \
                                         '1:todo ID:'
                                     ;;

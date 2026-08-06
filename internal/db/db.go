@@ -119,6 +119,9 @@ func Open(path string) (*DB, error) {
 	if err := addColumnIfNotExists(conn, `ALTER TABLE todos ADD COLUMN deleted_at DATETIME`, "todos deleted_at column"); err != nil {
 		return nil, err
 	}
+	if err := addColumnIfNotExists(conn, `ALTER TABLE todos ADD COLUMN due_date DATETIME`, "todos due_date column"); err != nil {
+		return nil, err
+	}
 
 	// Create indexes (must be after column migrations)
 	indexes := []struct {
@@ -130,6 +133,7 @@ func Open(path string) (*DB, error) {
 		{`CREATE INDEX IF NOT EXISTS idx_todos_created ON todos(created_at DESC)`, "todos created index"},
 		{`CREATE UNIQUE INDEX IF NOT EXISTS idx_todos_idempotency ON todos(idempotency_key) WHERE idempotency_key IS NOT NULL`, "todos idempotency index"},
 		{`CREATE INDEX IF NOT EXISTS idx_todos_deleted ON todos(deleted_at)`, "todos deleted_at index"},
+		{`CREATE INDEX IF NOT EXISTS idx_todos_due_date ON todos(due_date)`, "todos due_date index"},
 	}
 	for _, idx := range indexes {
 		if _, err := conn.Exec(idx.stmt); err != nil {

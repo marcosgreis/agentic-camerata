@@ -30,6 +30,7 @@ type todoJSON struct {
 	Status         string  `json:"status"`
 	Summary        string  `json:"summary"`
 	Date           *string `json:"date,omitempty"`
+	DueDate        *string `json:"due_date,omitempty"`
 	Source         *string `json:"source,omitempty"`
 	URL            *string `json:"url,omitempty"`
 	Channel        *string `json:"channel,omitempty"`
@@ -57,11 +58,32 @@ func todoToJSON(t *db.Todo) todoJSON {
 		s := t.Date.Format(time.RFC3339)
 		j.Date = &s
 	}
+	if t.DueDate != nil {
+		s := t.DueDate.Format(time.RFC3339)
+		j.DueDate = &s
+	}
 	if t.DeletedAt != nil {
 		s := t.DeletedAt.Format(time.RFC3339)
 		j.DeletedAt = &s
 	}
 	return j
+}
+
+// todayCutoffUTC returns today's local calendar date anchored at UTC midnight.
+// Due dates are date-only and stored at UTC midnight, so "overdue" is
+// due_date < this cutoff (strictly before today's date).
+func todayCutoffUTC() time.Time {
+	n := time.Now()
+	return time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+// parseDueBefore parses a YYYY-MM-DD --due-before value into a UTC-midnight cutoff.
+func parseDueBefore(s string) (*time.Time, error) {
+	parsed, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return nil, fmt.Errorf("invalid due-before %q: expected YYYY-MM-DD format", s)
+	}
+	return &parsed, nil
 }
 
 func printTodosJSON(todos []*db.Todo) error {
@@ -76,14 +98,15 @@ func printTodosJSON(todos []*db.Todo) error {
 
 // TodoAddCmd adds a new todo
 type TodoAddCmd struct {
-	Summary string `arg:"" help:"Summary of the todo"`
-	Source  string `short:"s" help:"Source (e.g. slack, github, email)" optional:""`
-	Channel string `short:"c" help:"Channel (e.g. #engineering)" optional:""`
-	Sender  string `short:"f" help:"Sender" optional:""`
-	URL     string `short:"u" help:"URL" optional:""`
-	Date    string `short:"d" help:"Date (YYYY-MM-DD)" optional:""`
-	Key         string `short:"k" help:"Idempotency key for deduplication" optional:""`
-	FullMessage string `short:"m" name:"full-message" help:"Full message text" optional:""`
+	Summary     string  `arg:"" help:"Summary of the todo"`
+	Source      string  `short:"s" help:"Source (e.g. slack, github, email)" optional:""`
+	Channel     string  `short:"c" help:"Channel (e.g. #engineering)" optional:""`
+	Sender      string  `short:"f" help:"Sender" optional:""`
+	URL         string  `short:"u" help:"URL" optional:""`
+	Date        string  `short:"d" help:"Date (YYYY-MM-DD)" optional:""`
+	Due         *string `short:"D" name:"due" help:"Due date (YYYY-MM-DD)" optional:""`
+	Key         string  `short:"k" help:"Idempotency key for deduplication" optional:""`
+	FullMessage string  `short:"m" name:"full-message" help:"Full message text" optional:""`
 }
 
 func (c *TodoAddCmd) Run(cli *CLI) error {
@@ -112,6 +135,13 @@ func (c *TodoAddCmd) Run(cli *CLI) error {
 		}
 		t.Date = &parsed
 	}
+	if c.Due != nil && *c.Due != "" {
+		parsed, err := time.Parse("2006-01-02", *c.Due)
+		if err != nil {
+			return fmt.Errorf("invalid due date %q: expected YYYY-MM-DD format", *c.Due)
+		}
+		t.DueDate = &parsed
+	}
 	if c.Key != "" {
 		t.IdempotencyKey = &c.Key
 	}
@@ -129,25 +159,55 @@ func (c *TodoAddCmd) Run(cli *CLI) error {
 
 // TodoListCmd lists todos
 type TodoListCmd struct {
-	Status string `short:"s" help:"Filter by status: todo, done, deleted, all" default:"todo"`
+	Status    string `short:"s" help:"Filter by status: todo, done, deleted, all" default:"todo"`
+	Overdue   bool   `help:"Only overdue todos (due date before today); implies --status todo" optional:""`
+	DueBefore string `name:"due-before" help:"Only todos due before DATE (YYYY-MM-DD)" optional:""`
+	SortDue   bool   `name:"sort-due" help:"Sort by due date ascending (nulls last)" optional:""`
 }
 
 func (c *TodoListCmd) Run(cli *CLI) error {
-	var status db.TodoStatus
+	filter := db.TodoFilter{SortDue: c.SortDue}
+
 	switch c.Status {
 	case "all", "":
-		status = ""
+		// no status filter (all non-deleted)
 	case "todo":
-		status = db.TodoStatusTodo
+		s := db.TodoStatusTodo
+		filter.Status = &s
 	case "done":
-		status = db.TodoStatusDone
+		s := db.TodoStatusDone
+		filter.Status = &s
 	case "deleted":
-		status = db.TodoStatusDeleted
+		filter.OnlyDeleted = true
 	default:
 		return fmt.Errorf("invalid status %q: must be todo, done, deleted, or all", c.Status)
 	}
 
-	todos, err := cli.Database().ListTodos(status)
+	// --overdue is pending-only; error if combined with a conflicting --status
+	if c.Overdue && c.Status != "todo" {
+		statusDesc := c.Status
+		if statusDesc == "" {
+			statusDesc = "all"
+		}
+		return fmt.Errorf("--overdue and --status %s are mutually exclusive: --overdue implies --status todo", statusDesc)
+	}
+	// --overdue and --due-before are mutually exclusive
+	if c.Overdue && c.DueBefore != "" {
+		return fmt.Errorf("--overdue and --due-before are mutually exclusive")
+	}
+
+	if c.Overdue {
+		cut := todayCutoffUTC()
+		filter.DueBefore = &cut
+	} else if c.DueBefore != "" {
+		cut, err := parseDueBefore(c.DueBefore)
+		if err != nil {
+			return err
+		}
+		filter.DueBefore = cut
+	}
+
+	todos, err := cli.Database().SearchTodos(filter)
 	if err != nil {
 		return fmt.Errorf("list todos: %w", err)
 	}
@@ -164,6 +224,9 @@ type TodoSearchCmd struct {
 	Sender         string `short:"f" help:"Filter by sender" optional:""`
 	Source         string `help:"Filter by source" optional:""`
 	IncludeDeleted bool   `short:"d" help:"Include soft-deleted todos" optional:""`
+	Overdue        bool   `help:"Only overdue todos (due date before today); implies --status todo" optional:""`
+	DueBefore      string `name:"due-before" help:"Only todos due before DATE (YYYY-MM-DD)" optional:""`
+	SortDue        bool   `name:"sort-due" help:"Sort by due date ascending (nulls last)" optional:""`
 }
 
 func (c *TodoSearchCmd) Run(cli *CLI) error {
@@ -197,6 +260,30 @@ func (c *TodoSearchCmd) Run(cli *CLI) error {
 	}
 	if c.Source != "" {
 		filter.Source = &c.Source
+	}
+
+	filter.SortDue = c.SortDue
+
+	// --overdue is pending-only; error if combined with --status done
+	if c.Overdue && c.Status == "done" {
+		return fmt.Errorf("--overdue and --status done are mutually exclusive: --overdue implies --status todo")
+	}
+	// --overdue and --due-before are mutually exclusive
+	if c.Overdue && c.DueBefore != "" {
+		return fmt.Errorf("--overdue and --due-before are mutually exclusive")
+	}
+	// --overdue forces status=todo (pending-only) and applies today cutoff
+	if c.Overdue {
+		s := db.TodoStatusTodo
+		filter.Status = &s
+		cut := todayCutoffUTC()
+		filter.DueBefore = &cut
+	} else if c.DueBefore != "" {
+		cut, err := parseDueBefore(c.DueBefore)
+		if err != nil {
+			return err
+		}
+		filter.DueBefore = cut
 	}
 
 	todos, err := cli.Database().SearchTodos(filter)
@@ -255,14 +342,15 @@ func (c *TodoUndoneCmd) Run(cli *CLI) error {
 
 // TodoUpdateCmd updates fields of a todo
 type TodoUpdateCmd struct {
-	ID      string `arg:"" help:"Todo ID"`
-	Summary string `short:"S" help:"New summary" optional:""`
-	Source  string `short:"s" help:"Source" optional:""`
-	Channel string `short:"c" help:"Channel" optional:""`
-	Sender  string `short:"f" help:"Sender" optional:""`
-	URL     string `short:"u" help:"URL" optional:""`
-	Date        string `short:"d" help:"Date (YYYY-MM-DD)" optional:""`
-	FullMessage string `short:"m" name:"full-message" help:"Full message text" optional:""`
+	ID          string  `arg:"" help:"Todo ID"`
+	Summary     string  `short:"S" help:"New summary" optional:""`
+	Source      string  `short:"s" help:"Source" optional:""`
+	Channel     string  `short:"c" help:"Channel" optional:""`
+	Sender      string  `short:"f" help:"Sender" optional:""`
+	URL         string  `short:"u" help:"URL" optional:""`
+	Date        string  `short:"d" help:"Date (YYYY-MM-DD)" optional:""`
+	Due         *string `short:"D" name:"due" help:"Due date (YYYY-MM-DD); pass empty to clear" optional:""`
+	FullMessage string  `short:"m" name:"full-message" help:"Full message text" optional:""`
 }
 
 func (c *TodoUpdateCmd) Run(cli *CLI) error {
@@ -295,6 +383,17 @@ func (c *TodoUpdateCmd) Run(cli *CLI) error {
 			return fmt.Errorf("invalid date %q: expected YYYY-MM-DD format", c.Date)
 		}
 		t.Date = &parsed
+	}
+	if c.Due != nil {
+		if *c.Due == "" {
+			t.DueDate = nil // explicit clear
+		} else {
+			parsed, err := time.Parse("2006-01-02", *c.Due)
+			if err != nil {
+				return fmt.Errorf("invalid due date %q: expected YYYY-MM-DD format", *c.Due)
+			}
+			t.DueDate = &parsed
+		}
 	}
 	if c.FullMessage != "" {
 		t.FullMessage = &c.FullMessage

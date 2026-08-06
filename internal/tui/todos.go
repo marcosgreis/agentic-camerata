@@ -36,8 +36,21 @@ func cleanMarkup(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// isOverdue reports whether a pending todo's due date is strictly before today
+// (date-only, local calendar). Due dates are stored at UTC midnight.
+func isOverdue(item *db.Todo) bool {
+	if item.Status != db.TodoStatusTodo || item.DueDate == nil {
+		return false
+	}
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	due := *item.DueDate
+	dueDay := time.Date(due.Year(), due.Month(), due.Day(), 0, 0, 0, 0, time.UTC)
+	return dueDay.Before(today)
+}
+
 // sortedTodos returns todos with TodoStatusTodo first, then TodoStatusDone.
-// Pending items are sorted by date ascending (nulls last).
+// Pending items are sorted overdue-first (earliest due date at top), then by existing date ordering.
 // Done items are sorted by updated_at descending (most recently completed first).
 func sortedTodos(todos []*db.Todo) []*db.Todo {
 	sorted := make([]*db.Todo, len(todos))
@@ -51,6 +64,15 @@ func sortedTodos(todos []*db.Todo) []*db.Todo {
 		// Done items: sort by updated_at descending (most recently completed first)
 		if !iPending {
 			return sorted[i].UpdatedAt.After(sorted[j].UpdatedAt)
+		}
+		// Pending: overdue items first (earliest due date first)
+		iOver, jOver := isOverdue(sorted[i]), isOverdue(sorted[j])
+		if iOver != jOver {
+			return iOver
+		}
+		if iOver && jOver {
+			// Both overdue: earliest due date first (most overdue at top)
+			return sorted[i].DueDate.Before(*sorted[j].DueDate)
 		}
 		// Pending items: sort by date ascending (nulls last)
 		if sorted[i].Date == nil && sorted[j].Date == nil {
@@ -71,6 +93,7 @@ func sortedTodos(todos []*db.Todo) []*db.Todo {
 const (
 	todoColStatusWidth = 10 // "[ ] to do"
 	todoColDateWidth   = 12 // "Mar 01 2026"
+	todoColDueWidth    = 12 // "Jul 01 2026"
 	todoColSenderWidth = 14
 	todoColSourceWidth = 12
 )
@@ -85,7 +108,7 @@ func (d *Dashboard) renderTodosList() string {
 
 	// Header line
 	// Account for panel border (2) + panel padding (2) + selection indicator (2) = 6
-	promptWidth := width - 6 - todoColStatusWidth - 1 - todoColDateWidth - 1 - todoColSenderWidth - 1 - todoColSourceWidth - 1
+	promptWidth := width - 6 - todoColStatusWidth - 1 - todoColDateWidth - 1 - todoColDueWidth - 1 - todoColSenderWidth - 1 - todoColSourceWidth - 1
 	if promptWidth < 10 {
 		promptWidth = 10
 	}
@@ -93,6 +116,7 @@ func (d *Dashboard) renderTodosList() string {
 		padRight("SUMMARY", promptWidth) + " " +
 		padRight("SENDER", todoColSenderWidth) + " " +
 		padRight("DATE", todoColDateWidth) + " " +
+		padRight("DUE", todoColDueWidth) + " " +
 		padRight("SOURCE", todoColSourceWidth)
 	content.WriteString(columnHeaderStyle.Render(header))
 	content.WriteString("\n")
@@ -229,6 +253,12 @@ func (d *Dashboard) formatTodoLine(item *db.Todo, summaryWidth int, selected boo
 		dateStr = item.Date.Format("Jan 02 2006")
 	}
 
+	// Due date
+	dueStr := "\u2014"
+	if item.DueDate != nil {
+		dueStr = item.DueDate.Format("Jan 02 2006")
+	}
+
 	// Sender
 	senderStr := "\u2014"
 	if item.Sender != nil {
@@ -251,12 +281,19 @@ func (d *Dashboard) formatTodoLine(item *db.Todo, summaryWidth int, selected boo
 			withBg(dimStyle).Render(padRight(summary, summaryWidth)) + " " +
 			withBg(dimStyle).Render(padRight(senderStr, todoColSenderWidth)) + " " +
 			withBg(dimStyle).Render(padRight(dateStr, todoColDateWidth)) + " " +
+			withBg(dimStyle).Render(padRight(dueStr, todoColDueWidth)) + " " +
 			withBg(dimStyle).Render(padRight(sourceStr, todoColSourceWidth))
+	}
+	// Pending row: apply overdue style to due cell when applicable
+	dueStyle := baseStyle
+	if isOverdue(item) {
+		dueStyle = todoOverdue
 	}
 	return padRight(statusStyled, todoColStatusWidth) + " " +
 		withBg(baseStyle).Render(padRight(summary, summaryWidth)) + " " +
 		withBg(baseStyle).Render(padRight(senderStr, todoColSenderWidth)) + " " +
 		withBg(baseStyle).Render(padRight(dateStr, todoColDateWidth)) + " " +
+		withBg(dueStyle).Render(padRight(dueStr, todoColDueWidth)) + " " +
 		withBg(baseStyle).Render(padRight(sourceStr, todoColSourceWidth))
 }
 
@@ -279,6 +316,16 @@ func (d *Dashboard) formatTodoInfo(item *db.Todo) string {
 		b.WriteString(fmt.Sprintf("Date:    %s\n", item.Date.Format(time.RFC3339)))
 	} else {
 		b.WriteString("Date:    \u2014\n")
+	}
+
+	if item.DueDate != nil {
+		if isOverdue(item) {
+			b.WriteString(fmt.Sprintf("Due:     %s\n", todoOverdue.Render(item.DueDate.Format(time.RFC3339))))
+		} else {
+			b.WriteString(fmt.Sprintf("Due:     %s\n", item.DueDate.Format(time.RFC3339)))
+		}
+	} else {
+		b.WriteString("Due:     \u2014\n")
 	}
 
 	if item.Source != nil {

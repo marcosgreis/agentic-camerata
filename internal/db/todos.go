@@ -23,6 +23,7 @@ type Todo struct {
 	Status         TodoStatus
 	Summary        string
 	Date           *time.Time
+	DueDate        *time.Time
 	Source         *string
 	URL            *string
 	Channel        *string
@@ -47,12 +48,12 @@ func (db *DB) CreateTodo(t *Todo) error {
 		}
 	}
 	query := `
-		INSERT INTO todos (id, status, summary, date, source, url, channel, sender, idempotency_key, full_message)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO todos (id, status, summary, date, due_date, source, url, channel, sender, idempotency_key, full_message)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := db.conn.Exec(query,
 		t.ID, t.Status, t.Summary,
-		nullTime(t.Date), nullString(t.Source), nullString(t.URL),
+		nullTime(t.Date), nullTime(t.DueDate), nullString(t.Source), nullString(t.URL),
 		nullString(t.Channel), nullString(t.Sender),
 		nullString(t.IdempotencyKey), nullString(t.FullMessage),
 	)
@@ -65,7 +66,7 @@ func (db *DB) CreateTodo(t *Todo) error {
 // GetTodoByIdempotencyKey retrieves a todo by its idempotency key
 func (db *DB) GetTodoByIdempotencyKey(key string) (*Todo, error) {
 	query := `
-		SELECT id, created_at, updated_at, status, summary, date, source, url, channel, sender, idempotency_key, full_message, deleted_at
+		SELECT id, created_at, updated_at, status, summary, date, due_date, source, url, channel, sender, idempotency_key, full_message, deleted_at
 		FROM todos WHERE idempotency_key = ?
 	`
 	row := db.conn.QueryRow(query, key)
@@ -75,7 +76,7 @@ func (db *DB) GetTodoByIdempotencyKey(key string) (*Todo, error) {
 // GetTodo retrieves a todo by ID
 func (db *DB) GetTodo(id string) (*Todo, error) {
 	query := `
-		SELECT id, created_at, updated_at, status, summary, date, source, url, channel, sender, idempotency_key, full_message, deleted_at
+		SELECT id, created_at, updated_at, status, summary, date, due_date, source, url, channel, sender, idempotency_key, full_message, deleted_at
 		FROM todos WHERE id = ?
 	`
 	row := db.conn.QueryRow(query, id)
@@ -91,18 +92,18 @@ func (db *DB) ListTodos(status TodoStatus) ([]*Todo, error) {
 
 	if status == TodoStatusDeleted {
 		query = `
-			SELECT id, created_at, updated_at, status, summary, date, source, url, channel, sender, idempotency_key, full_message, deleted_at
+			SELECT id, created_at, updated_at, status, summary, date, due_date, source, url, channel, sender, idempotency_key, full_message, deleted_at
 			FROM todos WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC
 		`
 	} else if status != "" {
 		query = `
-			SELECT id, created_at, updated_at, status, summary, date, source, url, channel, sender, idempotency_key, full_message, deleted_at
+			SELECT id, created_at, updated_at, status, summary, date, due_date, source, url, channel, sender, idempotency_key, full_message, deleted_at
 			FROM todos WHERE status = ? AND deleted_at IS NULL ORDER BY created_at DESC
 		`
 		args = append(args, status)
 	} else {
 		query = `
-			SELECT id, created_at, updated_at, status, summary, date, source, url, channel, sender, idempotency_key, full_message, deleted_at
+			SELECT id, created_at, updated_at, status, summary, date, due_date, source, url, channel, sender, idempotency_key, full_message, deleted_at
 			FROM todos WHERE deleted_at IS NULL ORDER BY created_at DESC
 		`
 	}
@@ -135,18 +136,23 @@ type TodoFilter struct {
 	Sender         *string
 	Source         *string
 	IncludeDeleted bool
+	OnlyDeleted    bool       // only soft-deleted rows (for `list --status deleted`)
+	DueBefore      *time.Time // keep rows with due_date < cutoff (and due_date IS NOT NULL)
+	SortDue        bool       // ORDER BY due_date ASC, NULLs last
 }
 
 // SearchTodos retrieves todos matching the filter criteria.
 // All non-nil filter fields are combined with AND.
 func (db *DB) SearchTodos(f TodoFilter) ([]*Todo, error) {
 	query := `
-		SELECT id, created_at, updated_at, status, summary, date, source, url, channel, sender, idempotency_key, full_message, deleted_at
+		SELECT id, created_at, updated_at, status, summary, date, due_date, source, url, channel, sender, idempotency_key, full_message, deleted_at
 		FROM todos WHERE 1=1
 	`
 	var args []interface{}
 
-	if !f.IncludeDeleted {
+	if f.OnlyDeleted {
+		query += " AND deleted_at IS NOT NULL"
+	} else if !f.IncludeDeleted {
 		query += " AND deleted_at IS NULL"
 	}
 	if f.ID != nil {
@@ -173,8 +179,19 @@ func (db *DB) SearchTodos(f TodoFilter) ([]*Todo, error) {
 		query += " AND source = ?"
 		args = append(args, *f.Source)
 	}
+	if f.DueBefore != nil {
+		query += " AND due_date IS NOT NULL AND due_date < ?"
+		args = append(args, *f.DueBefore)
+	}
 
-	query += " ORDER BY created_at DESC"
+	switch {
+	case f.SortDue:
+		query += " ORDER BY due_date IS NULL, due_date ASC"
+	case f.OnlyDeleted:
+		query += " ORDER BY deleted_at DESC"
+	default:
+		query += " ORDER BY created_at DESC"
+	}
 
 	rows, err := db.conn.Query(query, args...)
 	if err != nil {
@@ -202,6 +219,7 @@ func (db *DB) UpdateTodo(t *Todo) error {
 			status = ?,
 			summary = ?,
 			date = ?,
+			due_date = ?,
 			source = ?,
 			url = ?,
 			channel = ?,
@@ -211,7 +229,7 @@ func (db *DB) UpdateTodo(t *Todo) error {
 	`
 	_, err := db.conn.Exec(query,
 		t.Status, t.Summary,
-		nullTime(t.Date), nullString(t.Source), nullString(t.URL),
+		nullTime(t.Date), nullTime(t.DueDate), nullString(t.Source), nullString(t.URL),
 		nullString(t.Channel), nullString(t.Sender),
 		nullString(t.FullMessage),
 		t.ID,
@@ -237,12 +255,12 @@ func (db *DB) DeleteTodo(id string) error {
 // scanTodo scans a single row into a Todo
 func scanTodo(row *sql.Row) (*Todo, error) {
 	var t Todo
-	var date, deletedAt sql.NullTime
+	var date, dueDate, deletedAt sql.NullTime
 	var source, url, channel, sender, idempotencyKey, fullMessage sql.NullString
 
 	err := row.Scan(
 		&t.ID, &t.CreatedAt, &t.UpdatedAt, &t.Status, &t.Summary,
-		&date, &source, &url, &channel, &sender, &idempotencyKey, &fullMessage,
+		&date, &dueDate, &source, &url, &channel, &sender, &idempotencyKey, &fullMessage,
 		&deletedAt,
 	)
 	if err != nil {
@@ -254,6 +272,9 @@ func scanTodo(row *sql.Row) (*Todo, error) {
 
 	if date.Valid {
 		t.Date = &date.Time
+	}
+	if dueDate.Valid {
+		t.DueDate = &dueDate.Time
 	}
 	if source.Valid {
 		t.Source = &source.String
@@ -283,12 +304,12 @@ func scanTodo(row *sql.Row) (*Todo, error) {
 // scanTodoRows scans a rows cursor into a Todo
 func scanTodoRows(rows *sql.Rows) (*Todo, error) {
 	var t Todo
-	var date, deletedAt sql.NullTime
+	var date, dueDate, deletedAt sql.NullTime
 	var source, url, channel, sender, idempotencyKey, fullMessage sql.NullString
 
 	err := rows.Scan(
 		&t.ID, &t.CreatedAt, &t.UpdatedAt, &t.Status, &t.Summary,
-		&date, &source, &url, &channel, &sender, &idempotencyKey, &fullMessage,
+		&date, &dueDate, &source, &url, &channel, &sender, &idempotencyKey, &fullMessage,
 		&deletedAt,
 	)
 	if err != nil {
@@ -297,6 +318,9 @@ func scanTodoRows(rows *sql.Rows) (*Todo, error) {
 
 	if date.Valid {
 		t.Date = &date.Time
+	}
+	if dueDate.Valid {
+		t.DueDate = &dueDate.Time
 	}
 	if source.Valid {
 		t.Source = &source.String

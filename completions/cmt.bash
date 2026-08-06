@@ -262,11 +262,12 @@ _cmt_completions() {
                         -f|--sender) COMPREPLY=() ;;
                         -u|--url) COMPREPLY=() ;;
                         -d|--date) COMPREPLY=() ;;
+                        -D|--due) COMPREPLY=() ;;
                         -k|--key) COMPREPLY=() ;;
                         -m|--full-message) COMPREPLY=() ;;
                         *)
                             if [[ "$cur" == -* ]]; then
-                                COMPREPLY=($(compgen -W "-s --source -c --channel -f --sender -u --url -d --date -k --key -m --full-message" -- "$cur"))
+                                COMPREPLY=($(compgen -W "-s --source -c --channel -f --sender -u --url -d --date -D --due -k --key -m --full-message" -- "$cur"))
                             fi
                             ;;
                     esac
@@ -276,9 +277,10 @@ _cmt_completions() {
                         -s|--status)
                             COMPREPLY=($(compgen -W "todo done deleted all" -- "$cur"))
                             ;;
+                        --due-before) COMPREPLY=() ;;
                         *)
                             if [[ "$cur" == -* ]]; then
-                                COMPREPLY=($(compgen -W "-s --status" -- "$cur"))
+                                COMPREPLY=($(compgen -W "-s --status --overdue --due-before --sort-due" -- "$cur"))
                             fi
                             ;;
                     esac
@@ -293,9 +295,10 @@ _cmt_completions() {
                         -u|--url) COMPREPLY=() ;;
                         -f|--sender) COMPREPLY=() ;;
                         --source) COMPREPLY=() ;;
+                        --due-before) COMPREPLY=() ;;
                         *)
                             if [[ "$cur" == -* ]]; then
-                                COMPREPLY=($(compgen -W "--id -k --key -s --status -u --url -f --sender --source -d --include-deleted" -- "$cur"))
+                                COMPREPLY=($(compgen -W "--id -k --key -s --status -u --url -f --sender --source -d --include-deleted --overdue --due-before --sort-due" -- "$cur"))
                             fi
                             ;;
                     esac
@@ -308,10 +311,11 @@ _cmt_completions() {
                         -f|--sender) COMPREPLY=() ;;
                         -u|--url) COMPREPLY=() ;;
                         -d|--date) COMPREPLY=() ;;
+                        -D|--due) COMPREPLY=() ;;
                         -m|--full-message) COMPREPLY=() ;;
                         *)
                             if [[ "$cur" == -* ]]; then
-                                COMPREPLY=($(compgen -W "-S --summary -s --source -c --channel -f --sender -u --url -d --date -m --full-message" -- "$cur"))
+                                COMPREPLY=($(compgen -W "-S --summary -s --source -c --channel -f --sender -u --url -d --date -D --due -m --full-message" -- "$cur"))
                             fi
                             ;;
                     esac

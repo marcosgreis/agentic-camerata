@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS todos (
     status TEXT NOT NULL DEFAULT 'todo',   -- 'todo' | 'done'
     summary TEXT NOT NULL,
     date DATETIME,
+    due_date DATETIME,
     source TEXT,
     url TEXT,
     channel TEXT,
