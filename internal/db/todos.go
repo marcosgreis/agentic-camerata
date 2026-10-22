@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -30,6 +31,7 @@ type Todo struct {
 	Sender         *string
 	IdempotencyKey *string
 	FullMessage    *string
+	Labels         []string // user-defined labels, stored in todo_labels
 	DeletedAt      *time.Time
 }
 
@@ -60,6 +62,11 @@ func (db *DB) CreateTodo(t *Todo) error {
 	if err != nil {
 		return fmt.Errorf("insert todo: %w", err)
 	}
+	if len(t.Labels) > 0 {
+		if err := db.AddTodoLabels(t.ID, t.Labels); err != nil {
+			return fmt.Errorf("insert todo labels: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -70,7 +77,14 @@ func (db *DB) GetTodoByIdempotencyKey(key string) (*Todo, error) {
 		FROM todos WHERE idempotency_key = ?
 	`
 	row := db.conn.QueryRow(query, key)
-	return scanTodo(row)
+	t, err := scanTodo(row)
+	if err != nil || t == nil {
+		return t, err
+	}
+	if err := db.loadTodoLabels([]*Todo{t}); err != nil {
+		return nil, err
+	}
+	return t, nil
 }
 
 // GetTodo retrieves a todo by ID
@@ -80,7 +94,14 @@ func (db *DB) GetTodo(id string) (*Todo, error) {
 		FROM todos WHERE id = ?
 	`
 	row := db.conn.QueryRow(query, id)
-	return scanTodo(row)
+	t, err := scanTodo(row)
+	if err != nil || t == nil {
+		return t, err
+	}
+	if err := db.loadTodoLabels([]*Todo{t}); err != nil {
+		return nil, err
+	}
+	return t, nil
 }
 
 // ListTodos retrieves todos optionally filtered by status. Empty status returns all non-deleted.
@@ -123,6 +144,9 @@ func (db *DB) ListTodos(status TodoStatus) ([]*Todo, error) {
 		todos = append(todos, t)
 	}
 
+	if err := db.loadTodoLabels(todos); err != nil {
+		return nil, err
+	}
 	return todos, rows.Err()
 }
 
@@ -135,6 +159,7 @@ type TodoFilter struct {
 	URL            *string
 	Sender         *string
 	Source         *string
+	Labels         []string // each must be present (AND semantics, case-insensitive)
 	IncludeDeleted bool
 	OnlyDeleted    bool       // only soft-deleted rows (for `list --status deleted`)
 	DueBefore      *time.Time // keep rows with due_date < cutoff (and due_date IS NOT NULL)
@@ -179,6 +204,14 @@ func (db *DB) SearchTodos(f TodoFilter) ([]*Todo, error) {
 		query += " AND source = ?"
 		args = append(args, *f.Source)
 	}
+	for _, label := range f.Labels {
+		label = strings.TrimSpace(label)
+		if label == "" {
+			continue
+		}
+		query += " AND EXISTS (SELECT 1 FROM todo_labels tl WHERE tl.todo_id = todos.id AND tl.label = ? COLLATE NOCASE)"
+		args = append(args, label)
+	}
 	if f.DueBefore != nil {
 		query += " AND due_date IS NOT NULL AND due_date < ?"
 		args = append(args, *f.DueBefore)
@@ -208,6 +241,9 @@ func (db *DB) SearchTodos(f TodoFilter) ([]*Todo, error) {
 		todos = append(todos, t)
 	}
 
+	if err := db.loadTodoLabels(todos); err != nil {
+		return nil, err
+	}
 	return todos, rows.Err()
 }
 
