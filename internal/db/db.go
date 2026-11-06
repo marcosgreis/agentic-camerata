@@ -123,6 +123,16 @@ func Open(path string) (*DB, error) {
 		return nil, err
 	}
 
+	// Labels live in their own table so a todo can carry any number of them.
+	if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS todo_labels (
+		todo_id TEXT NOT NULL,
+		label TEXT NOT NULL COLLATE NOCASE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (todo_id, label)
+	)`); err != nil {
+		return nil, fmt.Errorf("migrate todo_labels table: %w", err)
+	}
+
 	// Create indexes (must be after column migrations)
 	indexes := []struct {
 		stmt        string
@@ -134,6 +144,7 @@ func Open(path string) (*DB, error) {
 		{`CREATE UNIQUE INDEX IF NOT EXISTS idx_todos_idempotency ON todos(idempotency_key) WHERE idempotency_key IS NOT NULL`, "todos idempotency index"},
 		{`CREATE INDEX IF NOT EXISTS idx_todos_deleted ON todos(deleted_at)`, "todos deleted_at index"},
 		{`CREATE INDEX IF NOT EXISTS idx_todos_due_date ON todos(due_date)`, "todos due_date index"},
+		{`CREATE INDEX IF NOT EXISTS idx_todo_labels_label ON todo_labels(label COLLATE NOCASE)`, "todo labels index"},
 	}
 	for _, idx := range indexes {
 		if _, err := conn.Exec(idx.stmt); err != nil {

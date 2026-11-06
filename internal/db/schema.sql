@@ -55,6 +55,15 @@ CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status);
 CREATE INDEX IF NOT EXISTS idx_todos_created ON todos(created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_todos_idempotency ON todos(idempotency_key) WHERE idempotency_key IS NOT NULL;
 
+CREATE TABLE IF NOT EXISTS todo_labels (
+    todo_id TEXT NOT NULL,
+    label TEXT NOT NULL COLLATE NOCASE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (todo_id, label)
+);
+
+CREATE INDEX IF NOT EXISTS idx_todo_labels_label ON todo_labels(label COLLATE NOCASE);
+
 CREATE TABLE IF NOT EXISTS venues (
     directory TEXT PRIMARY KEY,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
