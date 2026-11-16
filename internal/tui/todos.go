@@ -274,6 +274,9 @@ func (d *Dashboard) formatTodoLine(item *db.Todo, summaryWidth int, selected boo
 	// Summary (show only first line in table, clean markup)
 	summary, _, _ := strings.Cut(item.Summary, "\n")
 	summary = cleanMarkup(summary)
+	if len(item.Labels) > 0 {
+		summary += "  #" + strings.Join(item.Labels, " #")
+	}
 	summary = truncateToWidth(summary, summaryWidth)
 
 	if item.Status == db.TodoStatusDone {
@@ -310,6 +313,13 @@ func (d *Dashboard) formatTodoInfo(item *db.Todo) string {
 
 	// Summary
 	b.WriteString(fmt.Sprintf("Summary: %s\n", cleanMarkup(item.Summary)))
+
+	// Labels
+	if len(item.Labels) > 0 {
+		b.WriteString(fmt.Sprintf("Labels:  %s\n", strings.Join(item.Labels, ", ")))
+	} else {
+		b.WriteString("Labels:  \u2014\n")
+	}
 
 	// Nullable fields
 	if item.Date != nil {

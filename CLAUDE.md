@@ -20,6 +20,11 @@ cmt sessions [-s status]    # List sessions
 cmt dashboard               # Interactive TUI
 cmt catalog save [file] [name]   # Store a .md file (use -f/-d/-t/-c picker if no file)
 cmt catalog list/show/rm/pick    # Manage cataloged files
+cmt todo add "task" -l work,urgent  # Add a todo with labels
+cmt todo label add <id> <label...>  # Add labels to a todo
+cmt todo label rm <id> <label...>   # Remove labels from a todo
+cmt todo label list [id]            # List a todo's labels (or all labels + counts)
+cmt todo list -l work               # Filter todos by label
 ```
 
 ## Project Structure
@@ -107,6 +112,8 @@ Default: `~/.config/cmt/sessions.db` (override: `-d` flag or `CMT_DB` env)
 - `output_file` - path to session log
 - `pid` - process ID
 - `deleted_at` - soft-delete timestamp (NULL if not deleted)
+
+**Todo labels:** stored in `todo_labels (todo_id, label COLLATE NOCASE)`, any number per todo, case-insensitive; `todo list/search --label` filters require every given label.
 
 **Indices:** status, workflow_type, created_at DESC
 
