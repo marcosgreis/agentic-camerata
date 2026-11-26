@@ -91,7 +91,7 @@ func sortedTodos(todos []*db.Todo) []*db.Todo {
 
 // Column widths for todos table
 const (
-	todoColStatusWidth = 10 // "[ ] to do"
+	todoColStatusWidth = 6  // "STATUS"
 	todoColDateWidth   = 12 // "Mar 01 2026"
 	todoColDueWidth    = 12 // "Jul 01 2026"
 	todoColSenderWidth = 14
@@ -242,9 +242,9 @@ func (d *Dashboard) formatTodoLine(item *db.Todo, summaryWidth int, selected boo
 	// Status checkbox with color
 	var statusStyled string
 	if item.Status == db.TodoStatusTodo {
-		statusStyled = withBg(todoStatusTodo).Render("[ ] to do")
+		statusStyled = withBg(todoStatusTodo).Render("[ ]")
 	} else {
-		statusStyled = withBg(todoStatusDone).Render("[x] done")
+		statusStyled = withBg(todoStatusDone).Render("[x]")
 	}
 
 	// Date
@@ -306,9 +306,9 @@ func (d *Dashboard) formatTodoInfo(item *db.Todo) string {
 
 	// Status
 	if item.Status == db.TodoStatusTodo {
-		b.WriteString("Status:  " + todoStatusTodo.Render("[ ] to do") + "\n")
+		b.WriteString("Status:  " + todoStatusTodo.Render("[ ]") + "\n")
 	} else {
-		b.WriteString("Status:  " + todoStatusDone.Render("[x] done") + "\n")
+		b.WriteString("Status:  " + todoStatusDone.Render("[x]") + "\n")
 	}
 
 	// Summary
